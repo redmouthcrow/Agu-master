@@ -7,6 +7,7 @@ defineProps<{
   refreshing: boolean;
   hasApiKey: boolean;
   storageOk: boolean;
+  usingFileConfig: boolean;
   calendarLabel: string;
   stockCount: number;
   fundCount: number;
@@ -53,6 +54,9 @@ function onAdd() {
 
     <div v-if="!storageOk" class="banner banner-warn">
       本地存储不可用，刷新后数据将丢失
+    </div>
+    <div v-if="usingFileConfig" class="banner banner-info">
+      个人配置来自 web/agu.config.local.json（已忽略 Git）。修改后请重启开发服务。
     </div>
     <div v-if="!hasApiKey" class="banner banner-warn">
       请先配置 API Key

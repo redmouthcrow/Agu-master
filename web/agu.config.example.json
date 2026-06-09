@@ -1,0 +1,8 @@
+{
+  "_comment": "Copy to agu.config.local.json and fill in your values. agu.config.local.json is gitignored.",
+  "baseUrl": "https://api.deepseek.com/v1",
+  "apiKey": "sk-your-api-key-here",
+  "model": "deepseek-chat",
+  "watchlistCodes": ["600519", "510500", "159915"],
+  "watchlist": []
+}

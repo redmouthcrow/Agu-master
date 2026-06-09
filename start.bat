@@ -38,6 +38,8 @@ if errorlevel 1 goto :Fail
 call :EnsureDeps
 if errorlevel 1 goto :Fail
 
+call :EnsureUserConfig
+
 call :WriteMarker
 goto :StartDev
 
@@ -204,6 +206,16 @@ if errorlevel 1 (
 )
 
 echo [OK] Dependencies installed
+exit /b 0
+
+rem ---------------------------------------------------------------------------
+:EnsureUserConfig
+if exist "agu.config.local.json" exit /b 0
+if not exist "agu.config.example.json" exit /b 0
+
+echo [INFO] Creating agu.config.local.json from example...
+copy /y "agu.config.example.json" "agu.config.local.json" >nul
+echo [INFO] Edit web\agu.config.local.json with your API key and watchlist.
 exit /b 0
 
 rem ---------------------------------------------------------------------------

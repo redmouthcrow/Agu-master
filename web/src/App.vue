@@ -16,6 +16,7 @@ const {
   refreshing,
   configOpen,
   storageOk,
+  usingFileConfig,
   calendarLabel,
   toasts,
   hasApiKey,
@@ -40,6 +41,7 @@ onMounted(() => {
     :refreshing="refreshing"
     :has-api-key="hasApiKey"
     :storage-ok="storageOk"
+    :using-file-config="usingFileConfig"
     :calendar-label="calendarLabel"
     :stock-count="stockCount"
     :fund-count="fundCount"

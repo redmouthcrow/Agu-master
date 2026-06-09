@@ -26,6 +26,7 @@ import {
   syncTradingCalendar,
 } from '../services/tradingCalendar';
 import { createAlignScheduler } from '../services/scheduler';
+import { loadLocalUserConfig } from '../services/userConfig';
 
 const CONFIG_KEY = 'config';
 const DIAG_KEY = 'diagnosis_cache';
@@ -49,8 +50,9 @@ function migrateWatchlist(raw: WatchlistItem[]): WatchlistItem[] {
   return [...stocks, ...funds];
 }
 
-const config = ref<AppConfig>(loadConfig());
+const config = ref<AppConfig>(loadConfigFromStorage());
 const cards = ref<StockCardState[]>(buildCards(config.value.watchlist));
+const usingFileConfig = ref(false);
 const refreshing = ref(false);
 const configOpen = ref(false);
 const storageOk = ref(isStorageAvailable());
@@ -61,13 +63,26 @@ let toastId = 0;
 let stopScheduler: (() => void) | null = null;
 let lastAlignRun = 0;
 
-function loadConfig(): AppConfig {
+function loadConfigFromStorage(): AppConfig {
   const saved = getItem<AppConfig>(CONFIG_KEY);
-  if (!saved) {
-    return { ...defaultConfig };
+  const merged = { ...defaultConfig, ...saved };
+  const watchlist = migrateWatchlist(merged.watchlist ?? []);
+  return { ...merged, watchlist };
+}
+
+async function applyLocalFileConfig(): Promise<void> {
+  const fileConfig = await loadLocalUserConfig();
+  if (!fileConfig) {
+    return;
   }
-  const watchlist = migrateWatchlist(saved.watchlist ?? []);
-  return { ...defaultConfig, ...saved, watchlist };
+
+  usingFileConfig.value = true;
+  const watchlist = fileConfig.watchlist?.length
+    ? migrateWatchlist(fileConfig.watchlist)
+    : config.value.watchlist;
+
+  config.value = { ...config.value, ...fileConfig, watchlist };
+  cards.value = buildCards(watchlist);
 }
 
 function loadDiagnosisCache(): Record<string, DiagnosisCacheEntry> {
@@ -113,6 +128,9 @@ function countByType(type: InstrumentType): number {
 }
 
 function persistConfig() {
+  if (usingFileConfig.value) {
+    return;
+  }
   if (!setItem(CONFIG_KEY, config.value)) {
     showToast('本地存储写入失败');
   }
@@ -367,6 +385,7 @@ export function useAppState() {
   }
 
   async function bootstrap() {
+    await applyLocalFileConfig();
     await initCalendar(false);
     startScheduler();
     if (isInAutoTradingWindow(isTradingDay())) {
@@ -384,6 +403,7 @@ export function useAppState() {
     refreshing,
     configOpen,
     storageOk,
+    usingFileConfig,
     calendarStatus,
     calendarLabel,
     toasts,
