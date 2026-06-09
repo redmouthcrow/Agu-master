@@ -1,0 +1,103 @@
+# Agu — A 股 AI 实时诊断 H5 工具
+
+纯前端 Vue 看板：在交易时段按 **30 分钟网格**（对齐交易所时钟）拉取自选 **A 股与场内 ETF/LOF** 实时行情，并用你自备的大模型 API Key 生成短线技术面诊断。
+
+- **零后端**：配置与诊断缓存保存在本地，无需部署服务器
+- **分池自选**：股票最多 5 只 + 场内基金最多 5 只（合计 10 只）
+- **多端可用**：手机竖屏 / 桌面浏览器均可
+
+详细需求见 [Product-Spec.md](./Product-Spec.md)，UI 规范见 [UI-Spec.md](./UI-Spec.md)。
+
+## 主要能力
+
+| 能力 | 说明 |
+|------|------|
+| 实时行情 | 腾讯 JSONP 主源，新浪备源；每批最多 5 只，10 只分 2 批拉取 |
+| AI 诊断 | OpenAI 兼容接口（如 DeepSeek）；休市时快照不变则沿用缓存结论 |
+| 交易日历 | 自动同步节假日，非交易日不触发自动刷新 |
+| 本地配置 | API Key、自选列表可写入 `web/agu.config.local.json`（不进 Git） |
+
+## 环境要求
+
+- **Windows**（推荐用一键脚本 `start.bat`）
+- **Node.js 18+** 与 **npm**（脚本可尝试通过 winget 自动安装 Node.js LTS）
+
+## 快速启动（推荐）
+
+在项目根目录双击或执行：
+
+```bat
+start.bat
+```
+
+脚本会自动：
+
+1. 检查 Node.js / npm（缺失时尝试 winget 安装）
+2. 安装 `web/` 依赖（首次或 lockfile 变化时）
+3. 若缺少个人配置，从 `agu.config.example.json` 复制生成 `agu.config.local.json`
+4. 启动开发服务，默认地址：**http://localhost:5180**
+
+强制重新检查环境：
+
+```bat
+start.bat --recheck
+```
+
+## 个人配置
+
+编辑 `web/agu.config.local.json`（该文件已加入 `.gitignore`，不会上传 Git）：
+
+```json
+{
+  "baseUrl": "https://api.deepseek.com/v1",
+  "apiKey": "sk-your-api-key-here",
+  "model": "deepseek-chat",
+  "watchlistCodes": ["600519", "510500", "159915"]
+}
+```
+
+- 也可使用完整 `watchlist` 对象，详见 `web/agu.config.example.json`
+- 存在本地配置文件时，**以文件为准**；修改后需**重启开发服务**生效
+- 未创建本地文件时，可在页面「展开配置」里填写，数据保存在浏览器 LocalStorage
+
+## 手动启动
+
+```bat
+cd web
+npm install
+npm run dev
+```
+
+其他命令：
+
+```bat
+npm run build    # 生产构建
+npm run preview  # 预览构建结果（需本地配置文件仍放在 web/ 目录）
+```
+
+## 项目结构
+
+```
+Agu-master/
+├── start.bat                 # 一键环境检查 + 启动
+├── Product-Spec.md           # 产品需求文档
+├── UI-Spec.md                # UI 规范
+└── web/                      # Vue 3 + Vite 前端
+    ├── agu.config.example.json
+    ├── agu.config.local.json # 个人配置（本地，勿提交）
+    └── src/
+        ├── components/       # 配置面板、证券卡片等
+        ├── composables/      # 应用状态与刷新流水线
+        └── services/         # 行情、LLM、交易日历、调度
+```
+
+## 使用提示
+
+1. 先配置 API Key 与自选代码，再点击「立即刷新」
+2. 交易时段内会自动按 30 分钟网格刷新；非交易时段可手动刷新复盘
+3. 未配置 API Key 时仍可看行情与历史诊断，但不会调用 AI
+4. 仅供个人学习与研究，**不构成投资建议**
+
+## 技术栈
+
+Vue 3 · TypeScript · Vite · 纯前端 JSONP 行情 · OpenAI 兼容 LLM API
