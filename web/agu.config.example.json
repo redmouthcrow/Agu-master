@@ -3,6 +3,16 @@
   "baseUrl": "https://api.deepseek.com/v1",
   "apiKey": "sk-your-api-key-here",
   "model": "deepseek-chat",
+  "refreshFrequency": 30,
   "watchlistCodes": ["600519", "510500", "159915"],
-  "watchlist": []
+  "watchlist": [
+    {
+      "code": "sh600519",
+      "name": "600519",
+      "market": "sh",
+      "instrumentType": "stock",
+      "positionQty": 100,
+      "costPrice": 1680.5
+    }
+  ]
 }

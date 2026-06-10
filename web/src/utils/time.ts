@@ -1,6 +1,5 @@
-import type { SessionLabel } from '../types';
-
-const ALIGN_MINUTES = [570, 600, 630, 660, 690, 780, 810, 840, 870, 900];
+import type { RefreshFrequency, SessionLabel } from '../types';
+import { getAlignMinutesForFrequency, normalizeRefreshFrequency } from './alignGrid';
 
 export interface BeijingTime {
   year: number;
@@ -87,14 +86,19 @@ export function isInAutoTradingWindow(isTradingDayFlag: boolean, date = new Date
   return morning || afternoon;
 }
 
-export function getAlignedTimeLabel(isTradingDayFlag: boolean, date = new Date()): string {
+export function getAlignedTimeLabel(
+  isTradingDayFlag: boolean,
+  date = new Date(),
+  refreshFrequency: RefreshFrequency | unknown = 30,
+): string {
   const t = getBeijingTime(date);
   if (!isTradingDayFlag) {
     return `${t.dateStr} ${formatMinutesLabel(t.totalMinutes)}`;
   }
 
-  let slot = ALIGN_MINUTES[0];
-  for (const m of ALIGN_MINUTES) {
+  const slots = getAlignMinutesForFrequency(normalizeRefreshFrequency(refreshFrequency));
+  let slot = slots[0];
+  for (const m of slots) {
     if (t.totalMinutes >= m) {
       slot = m;
     } else {

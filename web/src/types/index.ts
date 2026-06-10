@@ -3,12 +3,15 @@ export const MAX_FUNDS = 5;
 
 export type InstrumentType = 'stock' | 'fund_etf';
 export type Market = 'sh' | 'sz' | 'bj';
+export type RefreshFrequency = 30 | 60;
 
 export interface WatchlistItem {
   code: string;
   name: string;
   market: Market;
   instrumentType: InstrumentType;
+  positionQty?: number;
+  costPrice?: number;
 }
 
 /** @deprecated use WatchlistItem */
@@ -18,6 +21,7 @@ export interface AppConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  refreshFrequency: RefreshFrequency;
   watchlist: WatchlistItem[];
 }
 
@@ -39,6 +43,7 @@ export interface DiagnosisResult {
   signal: string;
   analysis: string;
   risk: string;
+  action?: string;
 }
 
 export interface DiagnosisCacheEntry {

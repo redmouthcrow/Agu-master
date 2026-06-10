@@ -5,6 +5,8 @@ import type {
   DiagnosisCacheEntry,
   DiagnosisResult,
   InstrumentType,
+  QuoteSnapshot,
+  SessionLabel,
   StockCardState,
   WatchlistItem,
 } from '../types';
@@ -27,6 +29,8 @@ import {
 } from '../services/tradingCalendar';
 import { createAlignScheduler } from '../services/scheduler';
 import { loadLocalUserConfig } from '../services/userConfig';
+import { normalizeRefreshFrequency } from '../utils/alignGrid';
+import { validatePositionPair, roundCostPrice } from '../utils/position';
 
 const CONFIG_KEY = 'config';
 const DIAG_KEY = 'diagnosis_cache';
@@ -35,6 +39,7 @@ const defaultConfig: AppConfig = {
   baseUrl: 'https://api.deepseek.com/v1',
   apiKey: '',
   model: 'deepseek-chat',
+  refreshFrequency: 30,
   watchlist: [],
 };
 
@@ -61,13 +66,16 @@ const calendarStatus = ref<CalendarSyncStatus>({ state: 'idle' });
 const toasts = ref<{ id: number; message: string }[]>([]);
 let toastId = 0;
 let stopScheduler: (() => void) | null = null;
-let lastAlignRun = 0;
 
 function loadConfigFromStorage(): AppConfig {
   const saved = getItem<AppConfig>(CONFIG_KEY);
   const merged = { ...defaultConfig, ...saved };
   const watchlist = migrateWatchlist(merged.watchlist ?? []);
-  return { ...merged, watchlist };
+  return {
+    ...merged,
+    refreshFrequency: normalizeRefreshFrequency(merged.refreshFrequency),
+    watchlist,
+  };
 }
 
 async function applyLocalFileConfig(): Promise<void> {
@@ -81,7 +89,14 @@ async function applyLocalFileConfig(): Promise<void> {
     ? migrateWatchlist(fileConfig.watchlist)
     : config.value.watchlist;
 
-  config.value = { ...config.value, ...fileConfig, watchlist };
+  config.value = {
+    ...config.value,
+    ...fileConfig,
+    refreshFrequency: normalizeRefreshFrequency(
+      fileConfig.refreshFrequency ?? config.value.refreshFrequency,
+    ),
+    watchlist,
+  };
   cards.value = buildCards(watchlist);
 }
 
@@ -150,6 +165,94 @@ function showToast(message: string) {
   }, 4000);
 }
 
+type CardRefreshOutcome =
+  | 'ok'
+  | 'quote_error'
+  | 'reused'
+  | 'no_api_key'
+  | 'parse_error'
+  | 'ai_error'
+  | 'auth_stop';
+
+async function refreshCardQuoteAndDiagnosis(
+  card: StockCardState,
+  snap: QuoteSnapshot | undefined,
+  session: SessionLabel,
+  aligned: string,
+  skipAi = false,
+): Promise<CardRefreshOutcome> {
+  card.quoteError = false;
+  card.aiError = null;
+  card.parseError = false;
+  card.rawAiText = null;
+  card.diagnosisReused = false;
+
+  if (!snap) {
+    card.quoteError = true;
+    return 'quote_error';
+  }
+
+  card.snapshot = {
+    ...snap,
+    instrumentType: card.stock.instrumentType,
+  };
+  card.stock.name = snap.name;
+
+  if (!hasApiKey.value || skipAi) {
+    return 'no_api_key';
+  }
+
+  const fingerprint = buildSnapshotFingerprint(
+    card.snapshot,
+    session,
+    card.stock.positionQty,
+    card.stock.costPrice,
+  );
+  const cached = loadDiagnosisCache()[card.stock.code];
+  if (
+    cached?.fingerprint &&
+    cached.fingerprint === fingerprint &&
+    cached.diagnosis
+  ) {
+    card.diagnosis = cached.diagnosis;
+    card.updatedAt = cached.updatedAt;
+    card.diagnosisReused = true;
+    return 'reused';
+  }
+
+  try {
+    const result = await runDiagnosis(
+      card.snapshot,
+      card.stock,
+      config.value,
+      aligned,
+      session,
+    );
+    if (result.ok) {
+      const updatedAt = formatTimeHms();
+      card.diagnosis = result.data;
+      card.updatedAt = updatedAt;
+      persistDiagnosisEntry(card.stock.code, {
+        diagnosis: result.data,
+        fingerprint,
+        updatedAt,
+      });
+      return 'ok';
+    }
+    card.parseError = true;
+    card.rawAiText = result.raw;
+    return 'parse_error';
+  } catch (e) {
+    if (e instanceof LlmAuthError) {
+      showToast(e.message);
+      card.aiError = '诊断失败';
+      return 'auth_stop';
+    }
+    card.aiError = '诊断失败';
+    return 'ai_error';
+  }
+}
+
 const hasApiKey = computed(() => config.value.apiKey.trim().length > 0);
 
 const stockCount = computed(() => countByType('stock'));
@@ -190,20 +293,60 @@ export function useAppState() {
   }
 
   function saveConfigField(partial: Partial<AppConfig>) {
+    const prevFreq = config.value.refreshFrequency;
+    if (partial.refreshFrequency != null) {
+      partial.refreshFrequency = normalizeRefreshFrequency(partial.refreshFrequency);
+    }
     config.value = { ...config.value, ...partial };
     persistConfig();
+    if (
+      partial.refreshFrequency != null &&
+      partial.refreshFrequency !== prevFreq
+    ) {
+      restartScheduler();
+    }
   }
 
-  function addSymbol(input: string) {
-    const parsed = normalizeWatchlistSymbol(input);
+  function applyPositionFields(
+    item: WatchlistItem,
+    positionQty?: number,
+    costPrice?: number,
+  ): boolean {
+    const err = validatePositionPair(positionQty, costPrice);
+    if (err) {
+      showToast(err);
+      return false;
+    }
+    if (positionQty != null && costPrice != null) {
+      item.positionQty = positionQty;
+      item.costPrice = roundCostPrice(costPrice);
+    } else {
+      delete item.positionQty;
+      delete item.costPrice;
+    }
+    return true;
+  }
+
+  function addSymbol(
+    input: string,
+    positionQty?: number,
+    costPrice?: number,
+  ): boolean {
+    const trimmed = input.trim();
+    if (!trimmed) {
+      showToast('请先输入证券代码');
+      return false;
+    }
+
+    const parsed = normalizeWatchlistSymbol(trimmed);
     if (!parsed) {
       showToast('代码格式无效，请输入 A 股或场内 ETF/LOF 代码');
-      return;
+      return false;
     }
 
     if (config.value.watchlist.some((s) => s.code === parsed.code)) {
       showToast('该证券已在自选池');
-      return;
+      return false;
     }
 
     const limit = parsed.instrumentType === 'stock' ? MAX_STOCKS : MAX_FUNDS;
@@ -214,7 +357,7 @@ export function useAppState() {
           ? '股票已达上限 5 只'
           : '基金已达上限 5 只',
       );
-      return;
+      return false;
     }
 
     const item: WatchlistItem = {
@@ -223,6 +366,9 @@ export function useAppState() {
       market: parsed.market,
       instrumentType: parsed.instrumentType,
     };
+    if (!applyPositionFields(item, positionQty, costPrice)) {
+      return false;
+    }
     config.value.watchlist.push(item);
     cards.value.push({
       stock: item,
@@ -237,12 +383,59 @@ export function useAppState() {
       diagnosisReused: false,
     });
     persistConfig();
+    return true;
+  }
+
+  function updateSymbolPosition(
+    code: string,
+    positionQty?: number,
+    costPrice?: number,
+  ) {
+    const item = config.value.watchlist.find((s) => s.code === code);
+    const card = cards.value.find((c) => c.stock.code === code);
+    if (!item || !card) {
+      return;
+    }
+    if (!applyPositionFields(item, positionQty, costPrice)) {
+      return;
+    }
+    card.stock = { ...item };
+    persistConfig();
   }
 
   function removeSymbol(code: string) {
     config.value.watchlist = config.value.watchlist.filter((s) => s.code !== code);
     cards.value = cards.value.filter((c) => c.stock.code !== code);
     persistConfig();
+  }
+
+  async function runRefreshSymbol(code: string) {
+    const card = cards.value.find((c) => c.stock.code === code);
+    if (!card || card.loading) {
+      return;
+    }
+
+    const trading = isTradingDay();
+    const session = getSessionLabel(trading);
+    const aligned = getAlignedTimeLabel(trading, new Date(), config.value.refreshFrequency);
+
+    card.loading = true;
+    try {
+      const quotes = await fetchQuotesWithFallback([code]);
+      const outcome = await refreshCardQuoteAndDiagnosis(
+        card,
+        quotes.get(code) ?? undefined,
+        session,
+        aligned,
+      );
+      if (outcome === 'reused') {
+        showToast(`${card.stock.name} 行情未变，已沿用缓存诊断`);
+      } else if (outcome === 'quote_error') {
+        showToast(`${card.stock.name} 行情获取失败`);
+      }
+    } finally {
+      card.loading = false;
+    }
   }
 
   async function runRefresh(manual: boolean) {
@@ -256,7 +449,7 @@ export function useAppState() {
     refreshing.value = true;
     const trading = isTradingDay();
     const session = getSessionLabel(trading);
-    const aligned = getAlignedTimeLabel(trading);
+    const aligned = getAlignedTimeLabel(trading, new Date(), config.value.refreshFrequency);
 
     try {
       const codes = cards.value.map((c) => c.stock.code);
@@ -264,87 +457,36 @@ export function useAppState() {
 
       for (const card of cards.value) {
         card.loading = true;
-        card.quoteError = false;
-        card.aiError = null;
-        card.parseError = false;
-        card.rawAiText = null;
-        card.diagnosisReused = false;
       }
 
       let stopAi = false;
       let reusedCount = 0;
 
       for (const card of cards.value) {
-        const snap = quotes.get(card.stock.code);
-        if (!snap) {
-          card.quoteError = true;
-          card.loading = false;
-          continue;
+        const snap = quotes.get(card.stock.code) ?? undefined;
+        const outcome = await refreshCardQuoteAndDiagnosis(
+          card,
+          snap,
+          session,
+          aligned,
+          stopAi,
+        );
+
+        if (outcome === 'auth_stop') {
+          stopAi = true;
         }
-
-        card.snapshot = {
-          ...snap,
-          instrumentType: card.stock.instrumentType,
-        };
-        card.stock.name = snap.name;
-
-        if (!hasApiKey.value) {
-          card.loading = false;
-          continue;
-        }
-
-        if (stopAi) {
-          card.loading = false;
-          continue;
-        }
-
-        const fingerprint = buildSnapshotFingerprint(card.snapshot, session);
-        const cached = loadDiagnosisCache()[card.stock.code];
-        if (
-          cached?.fingerprint &&
-          cached.fingerprint === fingerprint &&
-          cached.diagnosis
-        ) {
-          card.diagnosis = cached.diagnosis;
-          card.updatedAt = cached.updatedAt;
-          card.diagnosisReused = true;
+        if (outcome === 'reused') {
           reusedCount += 1;
-          card.loading = false;
-          continue;
-        }
-
-        try {
-          const result = await runDiagnosis(
-            card.snapshot,
-            config.value,
-            aligned,
-            session,
-          );
-          if (result.ok) {
-            const updatedAt = formatTimeHms();
-            card.diagnosis = result.data;
-            card.updatedAt = updatedAt;
-            persistDiagnosisEntry(card.stock.code, {
-              diagnosis: result.data,
-              fingerprint,
-              updatedAt,
-            });
-          } else {
-            card.parseError = true;
-            card.rawAiText = result.raw;
-          }
-        } catch (e) {
-          if (e instanceof LlmAuthError) {
-            showToast(e.message);
-            stopAi = true;
-            card.aiError = '诊断失败';
-          } else {
-            card.aiError = '诊断失败';
-          }
         }
 
         card.loading = false;
-        await sleep(300);
+        if (
+          outcome !== 'quote_error' &&
+          outcome !== 'no_api_key' &&
+          !stopAi
+        ) {
+          await sleep(300);
+        }
       }
 
       if (manual && reusedCount > 0 && reusedCount === cards.value.length) {
@@ -354,32 +496,28 @@ export function useAppState() {
       }
     } finally {
       refreshing.value = false;
-      lastAlignRun = Date.now();
-      if (manual && stopScheduler) {
-        stopScheduler();
-        stopScheduler = createAlignScheduler(() => {
-          if (isInAutoTradingWindow(isTradingDay())) {
-            void runRefresh(false);
-          }
-        });
+      if (manual) {
+        restartScheduler();
       }
     }
   }
 
-  function startScheduler() {
+  function restartScheduler() {
     stopScheduler?.();
     stopScheduler = createAlignScheduler(() => {
       if (isInAutoTradingWindow(isTradingDay())) {
         void runRefresh(false);
       }
-    });
+    }, config.value.refreshFrequency);
+  }
+
+  function startScheduler() {
+    restartScheduler();
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        const trading = isTradingDay();
-        if (isInAutoTradingWindow(trading) && Date.now() - lastAlignRun > 60_000) {
-          void runRefresh(false);
-        }
+        // Tab 回到前台：仅重算下一对齐时刻，不补跑刷新
+        restartScheduler();
       }
     });
   }
@@ -411,7 +549,9 @@ export function useAppState() {
     showToast,
     saveConfigField,
     addSymbol,
+    updateSymbolPosition,
     removeSymbol,
+    runRefreshSymbol,
     runRefresh,
     initCalendar,
     bootstrap,

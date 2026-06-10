@@ -26,6 +26,13 @@ export function maskApiKey(key: string): string {
   return `${'*'.repeat(Math.min(key.length - 4, 12))}${key.slice(-4)}`;
 }
 
+export function formatCostPrice(n: number | null | undefined): string {
+  if (n === null || n === undefined) {
+    return '--';
+  }
+  return n.toFixed(4);
+}
+
 export function formatPrice(n: number | null | undefined): string {
   if (n === null || n === undefined) {
     return '--';

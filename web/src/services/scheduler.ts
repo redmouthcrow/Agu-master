@@ -1,22 +1,27 @@
+import type { RefreshFrequency } from '../types';
+import { getAlignMinutesForFrequency, normalizeRefreshFrequency } from '../utils/alignGrid';
 import { getBeijingTime, isInAutoTradingWindow } from '../utils/time';
 import { isTradingDay } from './tradingCalendar';
 
-const ALIGN_MINUTES = [570, 600, 630, 660, 690, 780, 810, 840, 870, 900];
-
-export function getDelayUntilNextAlign(now = new Date()): number {
+export function getDelayUntilNextAlign(
+  now = new Date(),
+  refreshFrequency: RefreshFrequency | unknown = 30,
+): number {
+  const freq = normalizeRefreshFrequency(refreshFrequency);
+  const alignMinutes = getAlignMinutesForFrequency(freq);
   const trading = isTradingDay(now);
   const t = getBeijingTime(now);
 
   if (trading) {
-    if (t.totalMinutes < 570) {
-      return minutesToMs(570 - t.totalMinutes, t.second);
+    if (t.totalMinutes < alignMinutes[0]) {
+      return minutesToMs(alignMinutes[0] - t.totalMinutes, t.second);
     }
     if (t.totalMinutes > 690 && t.totalMinutes < 780) {
       return minutesToMs(780 - t.totalMinutes, t.second);
     }
 
     if (isInAutoTradingWindow(trading, now)) {
-      for (const slot of ALIGN_MINUTES) {
+      for (const slot of alignMinutes) {
         if (t.totalMinutes < slot) {
           return minutesToMs(slot - t.totalMinutes, t.second);
         }
@@ -24,21 +29,20 @@ export function getDelayUntilNextAlign(now = new Date()): number {
     }
   }
 
-  return msUntilNextTradingDayOpen(now);
+  return msUntilNextTradingDayOpen(now, alignMinutes[0]);
 }
 
 function minutesToMs(minutes: number, seconds: number): number {
   return Math.max(1000, minutes * 60_000 - seconds * 1000);
 }
 
-function msUntilNextTradingDayOpen(from: Date): number {
+function msUntilNextTradingDayOpen(from: Date, openMinutes: number): number {
   for (let offset = 0; offset <= 14; offset += 1) {
     const d = new Date(from.getTime() + offset * 86_400_000);
     if (!isTradingDay(d)) {
       continue;
     }
     const t = getBeijingTime(d);
-    const openMinutes = 570;
     if (offset === 0 && t.totalMinutes >= 900) {
       continue;
     }
@@ -56,7 +60,11 @@ function msUntilNextTradingDayOpen(from: Date): number {
   return 86_400_000;
 }
 
-export function createAlignScheduler(onTick: () => void): () => void {
+export function createAlignScheduler(
+  onTick: () => void,
+  refreshFrequency: RefreshFrequency | unknown = 30,
+): () => void {
+  const freq = normalizeRefreshFrequency(refreshFrequency);
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
 
@@ -64,7 +72,7 @@ export function createAlignScheduler(onTick: () => void): () => void {
     if (stopped) {
       return;
     }
-    const delay = getDelayUntilNextAlign();
+    const delay = getDelayUntilNextAlign(new Date(), freq);
     timer = setTimeout(() => {
       onTick();
       schedule();

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import type { AppConfig } from '../types';
+import { ref } from 'vue';
+import type { AppConfig, RefreshFrequency } from '../types';
+import { parsePositionInputs } from '../utils/position';
 
-defineProps<{
+const props = defineProps<{
   config: AppConfig;
   configOpen: boolean;
   refreshing: boolean;
@@ -11,24 +13,52 @@ defineProps<{
   calendarLabel: string;
   stockCount: number;
   fundCount: number;
+  tryAddSymbol: (code: string, positionQty?: number, costPrice?: number) => boolean;
 }>();
 
 const emit = defineEmits<{
   toggle: [];
   save: [partial: Partial<AppConfig>];
-  addSymbol: [code: string];
   refresh: [];
   syncCalendar: [];
+  toast: [message: string];
 }>();
 
 const stockInput = defineModel<string>('stockInput', { default: '' });
+const positionQtyInput = ref('');
+const costPriceInput = ref('');
+
+const refreshOptions: { value: RefreshFrequency; label: string }[] = [
+  { value: 60, label: '60 分钟 · 省 Token' },
+  { value: 30, label: '30 分钟 · 标准' },
+];
 
 function onAdd() {
-  if (!stockInput.value.trim()) {
+  const code = stockInput.value.trim();
+  if (!code) {
+    emit('toast', '请先输入证券代码');
     return;
   }
-  emit('addSymbol', stockInput.value);
+
+  const position = parsePositionInputs(positionQtyInput.value, costPriceInput.value);
+  if (position.error) {
+    emit('toast', position.error);
+    return;
+  }
+
+  const ok = props.tryAddSymbol(code, position.positionQty, position.costPrice);
+  if (!ok) {
+    return;
+  }
+
   stockInput.value = '';
+  positionQtyInput.value = '';
+  costPriceInput.value = '';
+}
+
+function onRefreshFrequencyChange(e: Event) {
+  const value = Number((e.target as HTMLSelectElement).value) as RefreshFrequency;
+  emit('save', { refreshFrequency: value });
 }
 </script>
 
@@ -91,6 +121,22 @@ function onAdd() {
           @change="emit('save', { model: ($event.target as HTMLInputElement).value })"
         />
       </label>
+      <label class="field">
+        <span>自动刷新档位（交易时段对齐触发）</span>
+        <select
+          :value="config.refreshFrequency"
+          class="field-select"
+          @change="onRefreshFrequencyChange"
+        >
+          <option
+            v-for="opt in refreshOptions"
+            :key="opt.value"
+            :value="opt.value"
+          >
+            {{ opt.label }}
+          </option>
+        </select>
+      </label>
       <div class="add-row">
         <label class="field grow">
           <span>添加自选（股票 {{ stockCount }}/5 · 基金 {{ fundCount }}/5）</span>
@@ -102,6 +148,30 @@ function onAdd() {
           />
         </label>
         <button type="button" class="btn-secondary" @click="onAdd">添加</button>
+      </div>
+      <div class="add-row optional-row">
+        <label class="field grow">
+          <span>持仓数量（可选，与成本成对填写）</span>
+          <input
+            v-model="positionQtyInput"
+            type="number"
+            min="1"
+            step="1"
+            placeholder="1000"
+            @keyup.enter="onAdd"
+          />
+        </label>
+        <label class="field grow">
+          <span>成本价（可选，元，最多4位小数）</span>
+          <input
+            v-model="costPriceInput"
+            type="number"
+            min="0.0001"
+            step="0.0001"
+            placeholder="6.3500"
+            @keyup.enter="onAdd"
+          />
+        </label>
       </div>
     </section>
   </header>

@@ -23,8 +23,11 @@ const {
   config,
   saveConfigField,
   addSymbol,
+  showToast,
+  updateSymbolPosition,
   removeSymbol,
   runRefresh,
+  runRefreshSymbol,
   initCalendar,
   bootstrap,
 } = useAppState();
@@ -46,9 +49,10 @@ onMounted(() => {
     :stock-count="stockCount"
     :fund-count="fundCount"
     v-model:stock-input="stockInput"
+    :try-add-symbol="addSymbol"
     @toggle="configOpen = !configOpen"
     @save="saveConfigField"
-    @add-symbol="addSymbol"
+    @toast="showToast"
     @refresh="runRefresh(true)"
     @sync-calendar="initCalendar(true)"
   />
@@ -73,6 +77,9 @@ onMounted(() => {
             :key="card.stock.code"
             :card="card"
             @remove="removeSymbol"
+            @refresh="runRefreshSymbol"
+            @update-position="updateSymbolPosition"
+            @toast="showToast"
           />
         </div>
       </section>
@@ -88,6 +95,9 @@ onMounted(() => {
             :key="card.stock.code"
             :card="card"
             @remove="removeSymbol"
+            @refresh="runRefreshSymbol"
+            @update-position="updateSymbolPosition"
+            @toast="showToast"
           />
         </div>
       </section>

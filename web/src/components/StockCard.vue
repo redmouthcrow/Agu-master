@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { StockCardState } from '../types';
-import { formatPct, formatPrice, getSignalTone } from '../utils/display';
+import { formatCostPrice, formatPct, formatPrice, getSignalTone } from '../utils/display';
+import { calcPnlPct, hasPosition, parsePositionInputs } from '../utils/position';
 
 const props = defineProps<{
   card: StockCardState;
@@ -9,7 +10,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   remove: [code: string];
+  refresh: [code: string];
+  updatePosition: [code: string, positionQty?: number, costPrice?: number];
+  toast: [message: string];
 }>();
+
+const editingPosition = ref(false);
+const editQty = ref('');
+const editCost = ref('');
 
 const signalText = computed(() => {
   if (props.card.quoteError) {
@@ -44,6 +52,66 @@ const pctClass = computed(() => {
   }
   return 'flat';
 });
+
+const positionLine = computed(() => {
+  if (!hasPosition(props.card.stock)) {
+    return null;
+  }
+  const unit = props.card.stock.instrumentType === 'fund_etf' ? '份' : '股';
+  const pnl = calcPnlPct(props.card.snapshot?.price, props.card.stock.costPrice!);
+  return {
+    qty: props.card.stock.positionQty,
+    unit,
+    cost: props.card.stock.costPrice,
+    pnl,
+  };
+});
+
+const pnlClass = computed(() => {
+  const pnl = positionLine.value?.pnl;
+  if (pnl === null || pnl === undefined) {
+    return 'flat';
+  }
+  if (pnl > 0) {
+    return 'up';
+  }
+  if (pnl < 0) {
+    return 'down';
+  }
+  return 'flat';
+});
+
+function startEditPosition() {
+  editQty.value =
+    props.card.stock.positionQty != null
+      ? String(props.card.stock.positionQty)
+      : '';
+  editCost.value =
+    props.card.stock.costPrice != null
+      ? formatCostPrice(props.card.stock.costPrice)
+      : '';
+  editingPosition.value = true;
+}
+
+function savePosition() {
+  const position = parsePositionInputs(editQty.value, editCost.value);
+  if (position.error) {
+    emit('toast', position.error);
+    return;
+  }
+  emit(
+    'updatePosition',
+    props.card.stock.code,
+    position.positionQty,
+    position.costPrice,
+  );
+  editingPosition.value = false;
+}
+
+function clearPosition() {
+  emit('updatePosition', props.card.stock.code);
+  editingPosition.value = false;
+}
 </script>
 
 <template>
@@ -62,6 +130,16 @@ const pctClass = computed(() => {
         </div>
         <button
           type="button"
+          class="btn-refresh"
+          :disabled="card.loading"
+          aria-label="刷新此证券"
+          title="刷新此证券"
+          @click="emit('refresh', card.stock.code)"
+        >
+          ↻
+        </button>
+        <button
+          type="button"
           class="btn-remove"
           aria-label="删除自选"
           @click="emit('remove', card.stock.code)"
@@ -69,6 +147,30 @@ const pctClass = computed(() => {
           ×
         </button>
       </header>
+
+      <div v-if="positionLine && !editingPosition" class="position-line">
+        <span>
+          持仓 {{ positionLine.qty }}{{ positionLine.unit }} · 成本
+          {{ formatCostPrice(positionLine.cost) }}
+          <template v-if="positionLine.pnl !== null">
+            · 浮盈
+            <span class="tabular" :class="pnlClass">{{ formatPct(positionLine.pnl) }}</span>
+          </template>
+        </span>
+        <button type="button" class="btn-link btn-link-sm" @click="startEditPosition">
+          编辑
+        </button>
+      </div>
+
+      <div v-if="editingPosition" class="position-edit">
+        <input v-model="editQty" type="number" min="1" step="1" placeholder="数量" />
+        <input v-model="editCost" type="number" min="0.0001" step="0.0001" placeholder="成本" />
+        <button type="button" class="btn-link btn-link-sm" @click="savePosition">保存</button>
+        <button type="button" class="btn-link btn-link-sm" @click="clearPosition">清空</button>
+        <button type="button" class="btn-link btn-link-sm" @click="editingPosition = false">
+          取消
+        </button>
+      </div>
 
       <div class="signal-bar" :class="`tone-${signalTone}`">
         {{ signalText }}
@@ -88,6 +190,9 @@ const pctClass = computed(() => {
           <p class="line-clamp risk-text">
             <span class="tag">[风险]</span> {{ card.diagnosis.risk }}
           </p>
+          <p v-if="card.diagnosis.action" class="line-clamp line-clamp-loose action-text">
+            <span class="tag">[操作建议]</span> {{ card.diagnosis.action }}
+          </p>
         </template>
         <template v-else>
           <p class="muted">等待首次诊断…</p>
@@ -106,10 +211,17 @@ const pctClass = computed(() => {
       </footer>
 
       <div v-if="card.loading" class="card-overlay">
-        <span>诊断中…</span>
+        <span>刷新中…</span>
       </div>
-      <div v-else-if="card.quoteError" class="card-overlay">
+      <div v-else-if="card.quoteError" class="card-overlay card-overlay-error">
         <span>行情获取失败</span>
+        <button
+          type="button"
+          class="btn-secondary btn-overlay"
+          @click="emit('refresh', card.stock.code)"
+        >
+          重试
+        </button>
       </div>
     </div>
   </article>

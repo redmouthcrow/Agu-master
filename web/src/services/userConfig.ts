@@ -1,10 +1,12 @@
-import type { AppConfig, WatchlistItem } from '../types';
+import type { AppConfig, RefreshFrequency, WatchlistItem } from '../types';
 import { normalizeWatchlistSymbol } from '../utils/stockCode';
+import { normalizeRefreshFrequency } from '../utils/alignGrid';
 
 export interface LocalUserConfigFile {
   baseUrl?: string;
   apiKey?: string;
   model?: string;
+  refreshFrequency?: RefreshFrequency;
   watchlist?: WatchlistItem[];
   /** Shorthand: e.g. ["600519", "510500"] — merged with watchlist if both set */
   watchlistCodes?: string[];
@@ -62,6 +64,9 @@ function toAppConfig(raw: LocalUserConfigFile): Partial<AppConfig> | null {
   }
   if (raw.model?.trim()) {
     out.model = raw.model.trim();
+  }
+  if (raw.refreshFrequency != null) {
+    out.refreshFrequency = normalizeRefreshFrequency(raw.refreshFrequency);
   }
   if (watchlist?.length) {
     out.watchlist = watchlist;
