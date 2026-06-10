@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import type { AppConfig, RefreshFrequency } from '../types';
+import { maskApiKey } from '../utils/display';
 import { parsePositionInputs } from '../utils/position';
 
 const props = defineProps<{
@@ -107,10 +108,13 @@ function onRefreshFrequencyChange(e: Event) {
         <input
           :value="config.apiKey"
           type="password"
-          placeholder="sk-..."
+          :placeholder="config.apiKey ? maskApiKey(config.apiKey) : 'sk-...'"
           autocomplete="off"
           @change="emit('save', { apiKey: ($event.target as HTMLInputElement).value })"
         />
+        <span v-if="config.apiKey" class="field-hint">
+          已配置 {{ maskApiKey(config.apiKey) }}
+        </span>
       </label>
       <label class="field">
         <span>Model</span>

@@ -1,16 +1,29 @@
+import type { StandardSignal } from '../constants/signals';
 import type { SignalTone } from '../types';
+
+const SIGNAL_TONE_MAP: Record<StandardSignal, SignalTone> = {
+  多头持股: 'bullish',
+  逢高减仓: 'bearish',
+  '逢低做T': 'bullish',
+  空仓观望: 'neutral',
+};
 
 export function getSignalTone(signal: string, fallback = false): SignalTone {
   if (fallback) {
     return 'warning';
   }
-  if (/减仓|风险|分歧/.test(signal)) {
+  const trimmed = signal.trim();
+  const mapped = SIGNAL_TONE_MAP[trimmed as StandardSignal];
+  if (mapped) {
+    return mapped;
+  }
+  if (/减仓|风险|分歧/.test(trimmed)) {
     return 'bearish';
   }
-  if (/做T|吸纳|加仓/.test(signal)) {
+  if (/做T|吸纳|加仓|持股/.test(trimmed)) {
     return 'bullish';
   }
-  if (/观望|平稳/.test(signal)) {
+  if (/观望|平稳/.test(trimmed)) {
     return 'neutral';
   }
   return 'warning';

@@ -191,7 +191,7 @@ function clearPosition() {
             <span class="tag">[风险]</span> {{ card.diagnosis.risk }}
           </p>
           <p v-if="card.diagnosis.action" class="line-clamp line-clamp-loose action-text">
-            <span class="tag">[操作建议]</span> {{ card.diagnosis.action }}
+            操作建议：{{ card.diagnosis.action }}
           </p>
         </template>
         <template v-else>
@@ -211,7 +211,7 @@ function clearPosition() {
       </footer>
 
       <div v-if="card.loading" class="card-overlay">
-        <span>刷新中…</span>
+        <span>诊断中…</span>
       </div>
       <div v-else-if="card.quoteError" class="card-overlay card-overlay-error">
         <span>行情获取失败</span>
