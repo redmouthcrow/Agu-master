@@ -219,7 +219,7 @@ function clearPosition() {
 
       <div v-if="editingPosition && !widgetMode" class="position-edit">
         <input v-model="editQty" type="number" min="1" step="1" placeholder="Qty" />
-        <input v-model="editCost" type="number" min="0.0001" step="0.0001" placeholder="Cost" />
+        <input v-model="editCost" type="number" min="0.001" step="0.001" placeholder="Cost" />
         <button type="button" class="btn-link btn-link-sm" @click="savePosition">
           {{ t('common.save') }}
         </button>

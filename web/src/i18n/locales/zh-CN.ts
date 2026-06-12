@@ -13,7 +13,7 @@ export const zhCN = {
   'common.fundPoolShort': '基',
 
   'card.refreshAria': '刷新此证券',
-  'card.refreshTitle': '刷新全池',
+  'card.refreshTitle': '刷新此证券',
   'card.removeAria': '删除自选',
   'card.quoteFailed': '行情获取失败',
   'card.diagnoseFailed': '诊断失败',
@@ -51,7 +51,7 @@ export const zhCN = {
   'config.addWatchlistPlaceholder': '一次仅添加一只，如 600519',
   'config.addBtn': '添加',
   'config.positionQty': '持仓数量（可选，与成本成对填写）',
-  'config.positionCost': '成本价（可选，元，最多4位小数）',
+  'config.positionCost': '成本价（可选，元，最多3位小数）',
   'config.desktopSection': '桌面悬浮窗',
   'config.desktopPinHint': '勾选 1–4 只展示在悬浮窗（刷新仍针对全池 {total} 只）',
   'config.desktopPinEmpty': '请先添加自选',
@@ -99,8 +99,8 @@ export const zhCN = {
   'position.qtyInvalid': '持仓数量须为正整数',
   'position.qtyParseInvalid': '持仓数量无效',
   'position.costRange': '成本价须在 {min}–{max} 之间',
-  'position.costDecimals': '成本价最多保留4位小数',
-  'position.costFormatInvalid': '成本价格式无效，最多保留4位小数',
+  'position.costDecimals': '成本价最多保留3位小数',
+  'position.costFormatInvalid': '成本价格式无效，最多保留3位小数',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;

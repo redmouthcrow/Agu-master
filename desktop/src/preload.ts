@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('aguDesktop', {
   hideWidget: () => ipcRenderer.send('agu:hide-widget'),
   minimizeWidget: () => ipcRenderer.send('agu:minimize-widget'),
   requestRefresh: () => ipcRenderer.send('agu:request-refresh'),
+  requestRefreshSymbol: (code: string) => ipcRenderer.send('agu:request-refresh-symbol', code),
   requestSync: () => ipcRenderer.send('agu:request-sync'),
   broadcastLiveSync: (payload: unknown) => {
     ipcRenderer.send('agu:broadcast-live-sync', payload);
@@ -43,6 +44,13 @@ contextBridge.exposeInMainWorld('aguDesktop', {
     const handler = () => callback();
     ipcRenderer.on('agu:run-refresh', handler);
     return () => ipcRenderer.removeListener('agu:run-refresh', handler);
+  },
+  onRunRefreshSymbol: (callback: (code: string) => void) => {
+    const handler = (_event: IpcRendererEvent, code: string) => {
+      callback(code);
+    };
+    ipcRenderer.on('agu:run-refresh-symbol', handler);
+    return () => ipcRenderer.removeListener('agu:run-refresh-symbol', handler);
   },
   onPushSync: (callback: () => void) => {
     const handler = () => callback();

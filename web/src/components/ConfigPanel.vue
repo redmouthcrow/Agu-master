@@ -231,9 +231,9 @@ function onAlwaysOnTopChange(e: Event) {
           <input
             v-model="costPriceInput"
             type="number"
-            min="0.0001"
-            step="0.0001"
-            placeholder="6.3500"
+            min="0.001"
+            step="0.001"
+            placeholder="6.350"
             @keyup.enter="onAdd"
           />
         </label>

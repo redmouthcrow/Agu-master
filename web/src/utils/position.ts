@@ -1,9 +1,9 @@
 import type { WatchlistItem } from '../types';
 import { t } from '../i18n';
 
-export const COST_PRICE_DECIMALS = 4;
-export const COST_PRICE_MIN = 0.0001;
-export const COST_PRICE_MAX = 999_999.9999;
+export const COST_PRICE_DECIMALS = 3;
+export const COST_PRICE_MIN = 0.001;
+export const COST_PRICE_MAX = 999_999.999;
 
 export function roundCostPrice(n: number): number {
   const factor = 10 ** COST_PRICE_DECIMALS;
@@ -50,7 +50,7 @@ export function validatePositionPair(
 }
 
 function validateCostPriceString(costStr: string): string | null {
-  if (!/^\d+(\.\d{1,4})?$/.test(costStr)) {
+  if (!/^\d+(\.\d{1,3})?$/.test(costStr)) {
     return t('position.costFormatInvalid');
   }
   const n = Number(costStr);

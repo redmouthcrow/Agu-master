@@ -251,6 +251,13 @@ function registerIpc(): void {
     dashboardWindow?.webContents.send('agu:run-refresh');
   });
 
+  ipcMain.on('agu:request-refresh-symbol', (_event, code: unknown) => {
+    if (typeof code !== 'string' || !code.trim()) {
+      return;
+    }
+    dashboardWindow?.webContents.send('agu:run-refresh-symbol', code);
+  });
+
   ipcMain.on('agu:request-sync', () => {
     dashboardWindow?.webContents.send('agu:push-sync');
   });

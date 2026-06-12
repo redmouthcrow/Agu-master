@@ -15,7 +15,7 @@ export const enUS: Record<MessageKey, string> = {
   'common.fundPoolShort': 'FND',
 
   'card.refreshAria': 'Refresh this symbol',
-  'card.refreshTitle': 'Refresh full pool',
+  'card.refreshTitle': 'Refresh this symbol',
   'card.removeAria': 'Remove from watchlist',
   'card.quoteFailed': 'Quote fetch failed',
   'card.diagnoseFailed': 'Diagnosis failed',
@@ -54,7 +54,7 @@ export const enUS: Record<MessageKey, string> = {
   'config.addWatchlistPlaceholder': 'One symbol per add, e.g. 600519',
   'config.addBtn': 'Add',
   'config.positionQty': 'Position qty (optional, pair with cost)',
-  'config.positionCost': 'Cost price (optional, up to 4 decimals)',
+  'config.positionCost': 'Cost price (optional, up to 3 decimals)',
   'config.desktopSection': 'Desktop widget',
   'config.desktopPinHint': 'Pin 1–4 symbols for widget (refresh still runs on all {total})',
   'config.desktopPinEmpty': 'Add symbols to watchlist first',
@@ -102,6 +102,6 @@ export const enUS: Record<MessageKey, string> = {
   'position.qtyInvalid': 'Qty must be a positive integer',
   'position.qtyParseInvalid': 'Invalid qty',
   'position.costRange': 'Cost must be between {min} and {max}',
-  'position.costDecimals': 'Cost allows up to 4 decimal places',
-  'position.costFormatInvalid': 'Invalid cost format (max 4 decimals)',
+  'position.costDecimals': 'Cost allows up to 3 decimal places',
+  'position.costFormatInvalid': 'Invalid cost format (max 3 decimals)',
 };

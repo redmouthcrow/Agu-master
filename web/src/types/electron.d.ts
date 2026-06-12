@@ -9,8 +9,10 @@ export interface AguDesktopBridge {
   hideWidget: () => void;
   minimizeWidget: () => void;
   requestRefresh: () => void;
+  requestRefreshSymbol: (code: string) => void;
   requestSync: () => void;
   onRunRefresh: (callback: () => void) => () => void;
+  onRunRefreshSymbol: (callback: (code: string) => void) => () => void;
   onPushSync: (callback: () => void) => () => void;
   broadcastLiveSync: (payload: LiveSyncPayload) => void;
   onLiveSync: (callback: (payload: LiveSyncPayload) => void) => () => void;

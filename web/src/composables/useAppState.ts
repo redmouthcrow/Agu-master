@@ -372,6 +372,50 @@ async function refreshCardQuoteAndDiagnosis(
   }
 }
 
+const PARSE_RETRY_MAX = 30;
+const PARSE_RETRY_BASE_MS = 2000;
+
+async function refreshCardWithParseRetry(
+  card: StockCardState,
+  session: SessionLabel,
+  aligned: string,
+  skipAi: boolean,
+  aiState: { stopAi: boolean },
+  initialSnap?: QuoteSnapshot,
+): Promise<CardRefreshOutcome> {
+  let lastOutcome: CardRefreshOutcome = 'quote_error';
+  let snap = initialSnap;
+
+  for (let attempt = 1; attempt <= PARSE_RETRY_MAX; attempt += 1) {
+    if (attempt > 1 || snap === undefined) {
+      const quotes = await fetchQuotesWithFallback([card.stock.code]);
+      snap = quotes.get(card.stock.code) ?? undefined;
+    }
+
+    lastOutcome = await refreshCardQuoteAndDiagnosis(
+      card,
+      snap,
+      session,
+      aligned,
+      skipAi || aiState.stopAi,
+    );
+
+    if (lastOutcome === 'auth_stop') {
+      aiState.stopAi = true;
+    }
+
+    if (lastOutcome !== 'parse_error') {
+      return lastOutcome;
+    }
+
+    if (attempt < PARSE_RETRY_MAX) {
+      await sleep(Math.min(PARSE_RETRY_BASE_MS + attempt * 300, 8000));
+    }
+  }
+
+  return lastOutcome;
+}
+
 const hasApiKey = computed(() => config.value.apiKey.trim().length > 0);
 
 const stockCount = computed(() => countByType('stock'));
@@ -758,12 +802,44 @@ export function useAppState() {
     broadcastLiveSync();
   }
 
-  async function runRefreshSymbol(_code: string) {
+  async function runRefreshSingleCard(code: string) {
     if (!isPrimaryRunner) {
-      window.aguDesktop?.requestRefresh();
+      window.aguDesktop?.requestRefreshSymbol(code);
       return;
     }
-    await runRefresh(true);
+
+    const card = cards.value.find((c) => c.stock.code === code);
+    if (!card || card.loading) {
+      return;
+    }
+
+    card.loading = true;
+    try {
+      const trading = isTradingDay();
+      const session = getSessionLabel(trading);
+      const aligned = getAlignedTimeLabel(trading, new Date(), config.value.refreshFrequency);
+      const aiState = { stopAi: false };
+      const quotes = await fetchQuotesWithFallback([code]);
+      const outcome = await refreshCardWithParseRetry(
+        card,
+        session,
+        aligned,
+        false,
+        aiState,
+        quotes.get(code) ?? undefined,
+      );
+
+      if (outcome !== 'quote_error' && outcome !== 'no_api_key' && outcome !== 'reused' && !aiState.stopAi) {
+        await sleep(300);
+      }
+    } finally {
+      card.loading = false;
+      broadcastLiveSync();
+    }
+  }
+
+  async function runRefreshSymbol(code: string) {
+    await runRefreshSingleCard(code);
   }
 
   async function runRefresh(manual: boolean) {
@@ -791,17 +867,15 @@ export function useAppState() {
         card.loading = true;
         try {
           const snap = quotes.get(card.stock.code) ?? undefined;
-          const outcome = await refreshCardQuoteAndDiagnosis(
+          const outcome = await refreshCardWithParseRetry(
             card,
-            snap,
             session,
             aligned,
             aiState.stopAi,
+            aiState,
+            snap,
           );
 
-          if (outcome === 'auth_stop') {
-            aiState.stopAi = true;
-          }
           if (outcome === 'reused') {
             reusedCount += 1;
           }
@@ -850,6 +924,9 @@ export function useAppState() {
     }
     window.aguDesktop?.onRunRefresh(() => {
       void runRefresh(true);
+    });
+    window.aguDesktop?.onRunRefreshSymbol?.((code) => {
+      void runRefreshSingleCard(code);
     });
     window.aguDesktop?.onPushSync(() => {
       broadcastLiveSync();

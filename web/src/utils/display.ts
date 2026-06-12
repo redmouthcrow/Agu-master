@@ -43,14 +43,14 @@ export function formatCostPrice(n: number | null | undefined): string {
   if (n === null || n === undefined) {
     return '--';
   }
-  return n.toFixed(4);
+  return n.toFixed(3);
 }
 
 export function formatPrice(n: number | null | undefined): string {
   if (n === null || n === undefined) {
     return '--';
   }
-  return n.toFixed(2);
+  return n.toFixed(3);
 }
 
 export function formatPct(n: number | null | undefined): string {
