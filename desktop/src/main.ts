@@ -8,13 +8,16 @@ import {
   isEncryptionAvailable,
   loadLiveSync,
   loadUserDataSnapshot,
+  loadWidgetBounds,
   saveAppConfig,
   saveDiagnosisCache,
   saveLiveSync,
+  saveWidgetBounds,
   storageGet,
   storageRemove,
   storageSet,
   getUserDataPath,
+  type WidgetWindowBounds,
 } from './userDataStore';
 
 const DEV_PORT = Number(process.env.AGU_DEV_PORT ?? 5180);
@@ -134,11 +137,15 @@ function createDashboardWindow(): BrowserWindow {
 }
 
 function createWidgetWindow(): BrowserWindow {
+  const savedBounds = loadWidgetBounds();
   const win = new BrowserWindow({
-    width: 420,
-    height: 560,
+    width: savedBounds?.width ?? 420,
+    height: savedBounds?.height ?? 560,
     minWidth: 360,
     minHeight: 480,
+    ...(savedBounds
+      ? { x: savedBounds.x, y: savedBounds.y }
+      : {}),
     resizable: true,
     frame: false,
     transparent: true,
@@ -156,6 +163,7 @@ function createWidgetWindow(): BrowserWindow {
   });
 
   void win.loadURL(pageUrl('widget'));
+  attachWidgetBoundsPersistence(win);
   win.webContents.on('did-finish-load', () => {
     pushLiveSyncToWidget();
   });
@@ -167,6 +175,38 @@ function createWidgetWindow(): BrowserWindow {
     win.hide();
   });
   return win;
+}
+
+let widgetBoundsSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function persistWidgetBounds(win: BrowserWindow): void {
+  if (win.isDestroyed()) {
+    return;
+  }
+  const bounds = win.getBounds() as WidgetWindowBounds;
+  saveWidgetBounds(bounds);
+}
+
+function attachWidgetBoundsPersistence(win: BrowserWindow): void {
+  const scheduleSave = () => {
+    if (widgetBoundsSaveTimer) {
+      clearTimeout(widgetBoundsSaveTimer);
+    }
+    widgetBoundsSaveTimer = setTimeout(() => {
+      widgetBoundsSaveTimer = null;
+      persistWidgetBounds(win);
+    }, 400);
+  };
+
+  win.on('move', scheduleSave);
+  win.on('resize', scheduleSave);
+  win.on('close', () => {
+    if (widgetBoundsSaveTimer) {
+      clearTimeout(widgetBoundsSaveTimer);
+      widgetBoundsSaveTimer = null;
+    }
+    persistWidgetBounds(win);
+  });
 }
 
 function ensureDashboard(): void {

@@ -2,7 +2,7 @@
 
 > 本文件为 [Product-Spec.md](./Product-Spec.md) 的 UI 附录，开发实现以此为准。
 
-**文档版本**：2.1.0（对齐 Product-Spec 2.1.0）
+**文档版本**：2.1.1（对齐 Product-Spec 2.1.1）
 
 ---
 
@@ -103,6 +103,7 @@ min-height: 280px; /* 小屏兜底 */
 |------|------|
 | 默认尺寸 | 420 × 560 px |
 | 最小尺寸 | 360 × 480 px |
+| 位置/尺寸记忆 | 拖拽移动或缩放后写入 `%APPDATA%/AguMaster/agu/widget-window.json`，下次启动恢复 |
 | 边框 | 无边框（`frame: false`） |
 | 背景 | 窗口透明 + 内容区暗色毛玻璃底板 `rgba(20,20,20,0.92)`，保证 signal 可读 |
 | 透明度 | 整窗 opacity 由 `widgetOpacity` 控制，默认 **0.90**，范围 **0.70–1.00** |

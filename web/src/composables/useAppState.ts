@@ -152,6 +152,7 @@ let stopScheduler: (() => void) | null = null;
 let lastAppliedSyncTs = 0;
 let lastWidgetOpacity: number | null = null;
 let lastWidgetAlwaysOnTop: boolean | null = null;
+let desktopPersistenceReady = false;
 let diagnosisSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 const AI_REFRESH_CONCURRENCY = 2;
@@ -210,8 +211,15 @@ function flushDiagnosisCache() {
   setItem(DIAG_KEY, cache);
 }
 
-async function flushDesktopPersistence(): Promise<void> {
+function canPersistDesktopConfig(): boolean {
   if (!isDesktopRuntime() || !isPrimaryRunner || usingFileConfig.value) {
+    return false;
+  }
+  return desktopPersistenceReady;
+}
+
+async function flushDesktopPersistence(): Promise<void> {
+  if (!canPersistDesktopConfig()) {
     return;
   }
   if (diagnosisSaveTimer) {
@@ -233,6 +241,8 @@ function applyConfigFromLiveSyncPayload(live: LiveSyncPayload): boolean {
   config.value = normalizeConfig({
     ...defaultConfig,
     ...config.value,
+    baseUrl: live.config.baseUrl ?? config.value.baseUrl,
+    model: live.config.model ?? config.value.model,
     watchlist: migrateWatchlist(live.config.watchlist),
     widgetPinnedCodes: live.config.widgetPinnedCodes,
     widgetOpacity: live.config.widgetOpacity,
@@ -252,6 +262,9 @@ function persistConfig() {
     return;
   }
   if (isDesktopRuntime()) {
+    if (!canPersistDesktopConfig()) {
+      return;
+    }
     void saveDesktopConfig(config.value);
     return;
   }
@@ -448,6 +461,8 @@ function buildLiveSyncPayload(): LiveSyncPayload {
   return {
     ts: Date.now(),
     config: {
+      baseUrl: config.value.baseUrl,
+      model: config.value.model,
       widgetPinnedCodes: config.value.widgetPinnedCodes,
       widgetOpacity: config.value.widgetOpacity,
       widgetAlwaysOnTop: config.value.widgetAlwaysOnTop,
@@ -507,6 +522,8 @@ function applyLiveSync(raw: LiveSyncPayload) {
   const watchlist = migrateWatchlist(payload.config.watchlist ?? config.value.watchlist);
   config.value = normalizeConfig({
     ...config.value,
+    baseUrl: payload.config.baseUrl ?? config.value.baseUrl,
+    model: payload.config.model ?? config.value.model,
     watchlist,
     widgetPinnedCodes: payload.config.widgetPinnedCodes,
     widgetOpacity: payload.config.widgetOpacity,
@@ -573,9 +590,7 @@ async function hydrateDesktopPersistence(): Promise<void> {
 
   if (isPrimaryRunner) {
     let snap = await loadDesktopUserData();
-    const hasFileConfig = Boolean(
-      snap?.config?.watchlist?.length || snap?.config?.apiKey?.trim(),
-    );
+    const hasFileConfig = Boolean(snap?.config);
     const hasFileDiag = Boolean(
       snap?.diagnosisCache && Object.keys(snap.diagnosisCache).length > 0,
     );
@@ -588,13 +603,14 @@ async function hydrateDesktopPersistence(): Promise<void> {
     if (snap?.config) {
       config.value = normalizeConfig({ ...defaultConfig, ...snap.config });
     } else if (snap?.liveSync) {
-      applyConfigFromLiveSyncPayload(snap.liveSync);
+      applyConfigFromLiveSyncPayload(snap.liveSync as LiveSyncPayload);
     }
 
     if (snap?.diagnosisCache) {
       diagnosisCacheMemory = readDiagnosisCacheFromObject(snap.diagnosisCache);
     }
     cards.value = buildCards(config.value.watchlist);
+    desktopPersistenceReady = true;
   }
 
   activateDesktopStorageMirror();

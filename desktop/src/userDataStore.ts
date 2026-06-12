@@ -6,12 +6,23 @@ const STORE_DIR_NAME = 'agu';
 const CONFIG_FILE = 'config.json';
 const DIAGNOSIS_FILE = 'diagnosis-cache.json';
 const LIVE_SYNC_FILE = 'live-sync.json';
+const WIDGET_BOUNDS_FILE = 'widget-window.json';
 const CALENDAR_DIR = 'calendars';
+
+const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1';
+const DEFAULT_MODEL = 'deepseek-chat';
+
+export interface WidgetWindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 export interface PersistedAppConfig {
   baseUrl: string;
   model: string;
-  refreshFrequency: 30 | 60;
+  refreshFrequency: 5 | 15 | 30 | 60;
   watchlist: unknown[];
   widgetPinnedCodes?: string[];
   widgetOpacity?: number;
@@ -87,12 +98,54 @@ function decryptApiKey(apiKeyEnc: string | undefined): string {
   }
 }
 
+function hasNonDefaultLlmEndpoint(config: Partial<PersistedAppConfig> | null | undefined): boolean {
+  if (!config) {
+    return false;
+  }
+  const baseUrl = config.baseUrl?.trim();
+  const model = config.model?.trim();
+  return Boolean(
+    (baseUrl && baseUrl !== DEFAULT_BASE_URL) ||
+    (model && model !== DEFAULT_MODEL),
+  );
+}
+
 export function isEncryptionAvailable(): boolean {
   return safeStorage.isEncryptionAvailable();
 }
 
 export function getUserDataPath(): string {
   return storeRoot();
+}
+
+export function loadWidgetBounds(): WidgetWindowBounds | null {
+  const raw = readJsonFile<Partial<WidgetWindowBounds>>(
+    path.join(storeRoot(), WIDGET_BOUNDS_FILE),
+  );
+  if (
+    raw == null ||
+    typeof raw.x !== 'number' ||
+    typeof raw.y !== 'number' ||
+    typeof raw.width !== 'number' ||
+    typeof raw.height !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    x: Math.round(raw.x),
+    y: Math.round(raw.y),
+    width: Math.max(360, Math.round(raw.width)),
+    height: Math.max(480, Math.round(raw.height)),
+  };
+}
+
+export function saveWidgetBounds(bounds: WidgetWindowBounds): boolean {
+  return writeJsonFile(path.join(ensureStoreDir(), WIDGET_BOUNDS_FILE), {
+    x: Math.round(bounds.x),
+    y: Math.round(bounds.y),
+    width: Math.max(360, Math.round(bounds.width)),
+    height: Math.max(480, Math.round(bounds.height)),
+  });
 }
 
 export function loadUserDataSnapshot(): UserDataSnapshot {
@@ -135,7 +188,10 @@ function configHasUserData(config: (PersistedAppConfig & { apiKey?: string }) | 
   if (config.apiKey?.trim()) {
     return true;
   }
-  return Array.isArray(config.watchlist) && config.watchlist.length > 0;
+  if (Array.isArray(config.watchlist) && config.watchlist.length > 0) {
+    return true;
+  }
+  return hasNonDefaultLlmEndpoint(config);
 }
 
 export function saveDiagnosisCache(cache: Record<string, unknown>): boolean {

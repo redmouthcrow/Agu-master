@@ -5,6 +5,13 @@ export type InstrumentType = 'stock' | 'fund_etf';
 export type Market = 'sh' | 'sz' | 'bj';
 export type RefreshFrequency = 5 | 15 | 30 | 60;
 
+export interface WidgetWindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface WatchlistItem {
   code: string;
   name: string;
@@ -100,6 +107,8 @@ export interface LiveSyncPayload {
   ts: number;
   config: Pick<
     AppConfig,
+    | 'baseUrl'
+    | 'model'
     | 'widgetPinnedCodes'
     | 'widgetOpacity'
     | 'widgetAlwaysOnTop'
