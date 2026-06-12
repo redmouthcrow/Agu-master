@@ -11,10 +11,10 @@
     "dev": "npm run build:main && npx --no-install electron .",
     "start": "npx --no-install electron .",
     "prepack:clean": "node scripts/prepack-clean.mjs",
-    "pack:builder": "npm run build:main && npm run build:web && npx --no-install electron-builder --win --x64",
+    "pack:builder": "npm run build:main && npm run build:web && node scripts/pack-builder.mjs --win --x64",
     "pack": "npm run prepack:clean && npm run pack:builder",
     "pack:installer": "npm run pack",
-    "pack:portable": "npm run prepack:clean && npm run build:main && npm run build:web && npx --no-install electron-builder --win portable --x64",
+    "pack:portable": "npm run prepack:clean && npm run build:main && npm run build:web && node scripts/pack-builder.mjs --win portable --x64",
     "build:web": "npm run build --prefix ../web"
   },
   "build": {

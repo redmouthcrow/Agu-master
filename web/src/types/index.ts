@@ -3,7 +3,7 @@ export const MAX_FUNDS = 5;
 
 export type InstrumentType = 'stock' | 'fund_etf';
 export type Market = 'sh' | 'sz' | 'bj';
-export type RefreshFrequency = 30 | 60;
+export type RefreshFrequency = 5 | 15 | 30 | 60;
 
 export interface WatchlistItem {
   code: string;

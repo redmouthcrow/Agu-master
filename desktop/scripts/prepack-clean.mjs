@@ -8,6 +8,7 @@ const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const releaseDir = path.join(desktopRoot, 'release');
 const stagingDir = path.join(releaseDir, 'staging');
 const legacyWinUnpacked = path.join(releaseDir, 'win-unpacked');
+const activeOutputFile = path.join(releaseDir, '.active-output');
 const killScript = path.join(desktopRoot, 'scripts', 'prepack-kill.ps1');
 
 function sleep(ms) {
@@ -57,13 +58,26 @@ function killProcessesLockingRelease() {
   }
 }
 
+function clearReadOnlyAttributes(target) {
+  if (process.platform !== 'win32' || !fs.existsSync(target)) {
+    return;
+  }
+  try {
+    run(`attrib -R "${target}" /S /D`);
+  } catch {
+    /* best effort */
+  }
+}
+
 function removeDirCmd(target) {
+  clearReadOnlyAttributes(target);
   run(`cmd /c rmdir /s /q "${target}"`);
 }
 
 function removeDirRobocopy(target) {
   const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agu-prepack-empty-'));
   try {
+    clearReadOnlyAttributes(target);
     const result = spawnSync(
       'robocopy',
       [emptyDir, target, '/MIR', '/R:2', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/nc', '/ns', '/np'],
@@ -89,15 +103,19 @@ function removePath(target) {
     if (fs.existsSync(target)) {
       removeDirRobocopy(target);
     }
+    if (fs.existsSync(target)) {
+      fs.rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 });
+    }
     return;
   }
 
+  clearReadOnlyAttributes(target);
   fs.unlinkSync(target);
 }
 
-async function removeWithRetry(target, attempts = 8) {
+async function removeWithRetry(target, attempts = 5) {
   if (!fs.existsSync(target)) {
-    return;
+    return true;
   }
 
   const label = path.relative(desktopRoot, target);
@@ -115,41 +133,58 @@ async function removeWithRetry(target, attempts = 8) {
       }
 
       log(`removed ${label}`);
-      return;
+      return true;
     } catch (err) {
       if (i === attempts) {
-        throw new Error(`${label}: ${err.code || err.message}`);
+        return false;
       }
       log(`retry ${i}/${attempts - 1} for ${label}: ${err.code || err.message}`);
       killProcessesLockingRelease();
       await sleep(1200);
     }
   }
+
+  return false;
 }
 
 async function removeOrQuarantine(target, label) {
+  const removed = await removeWithRetry(target, 4);
+  if (removed) {
+    return;
+  }
+
+  const quarantine = `${target}.locked.${Date.now()}`;
   try {
-    await removeWithRetry(target, 5);
-  } catch (err) {
-    const quarantine = `${target}.locked.${Date.now()}`;
-    try {
-      fs.renameSync(target, quarantine);
-      log(`${label} quarantined to ${path.basename(quarantine)}`);
-    } catch (renameErr) {
-      log(`warning: ${label} still locked (${renameErr.message}); continuing with release/staging`);
-    }
+    fs.renameSync(target, quarantine);
+    log(`${label} quarantined to ${path.basename(quarantine)}`);
+    await removeWithRetry(quarantine, 2);
+  } catch (renameErr) {
+    log(`warning: ${label} still locked (${renameErr.message})`);
   }
 }
 
-async function main() {
-  log('stopping AguMaster / Electron / Explorer windows on release...');
+async function ensureStagingOutput() {
   killProcessesLockingRelease();
   await sleep(1000);
   killProcessesLockingRelease();
   await sleep(500);
 
   log('cleaning release/staging...');
-  await removeWithRetry(stagingDir);
+  const stagingRemoved = await removeWithRetry(stagingDir, 4);
+
+  let outputDir = stagingDir;
+  if (!stagingRemoved && fs.existsSync(stagingDir)) {
+    const quarantine = `${stagingDir}.locked.${Date.now()}`;
+    try {
+      fs.renameSync(stagingDir, quarantine);
+      log(`staging quarantined to ${path.basename(quarantine)}`);
+      outputDir = stagingDir;
+    } catch {
+      outputDir = path.join(releaseDir, `staging-${Date.now()}`);
+      log(`staging locked; using alternate output: ${path.relative(desktopRoot, outputDir)}`);
+      log('tip: close apps scanning desktop\\release (Explorer, antivirus, IDE) and delete old staging manually');
+    }
+  }
 
   if (fs.existsSync(legacyWinUnpacked)) {
     log('cleaning legacy release/win-unpacked...');
@@ -167,8 +202,15 @@ async function main() {
     }
   }
 
-  fs.mkdirSync(stagingDir, { recursive: true });
-  log('release folder ready');
+  fs.mkdirSync(outputDir, { recursive: true });
+  const relOutput = path.relative(desktopRoot, outputDir).replace(/\\/g, '/');
+  fs.writeFileSync(activeOutputFile, `${relOutput}\n`, 'utf8');
+  log(`release folder ready (${relOutput})`);
+}
+
+async function main() {
+  log('stopping AguMaster / Electron / Explorer windows on release...');
+  await ensureStagingOutput();
 }
 
 main().catch((err) => {

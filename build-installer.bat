@@ -54,13 +54,17 @@ if errorlevel 1 (
 
 echo.
 echo === Build complete ===
-echo Installer: %DESKTOP%\release\staging\AguMaster-*-win-x64-setup.exe
+set "OUT_DIR=release\staging"
+if exist "%DESKTOP%\release\.active-output" (
+  set /p OUT_DIR=<"%DESKTOP%\release\.active-output"
+)
+echo Installer: %DESKTOP%\!OUT_DIR!\AguMaster-*-win-x64-setup.exe
 echo.
-dir /b "%DESKTOP%\release\staging\AguMaster-*-win-x64-setup.exe" 2>nul
+dir /b "%DESKTOP%\!OUT_DIR!\AguMaster-*-win-x64-setup.exe" 2>nul
 if errorlevel 1 (
-  echo [WARN] Setup exe not found - check desktop\release\staging\
+  echo [WARN] Setup exe not found - check desktop\!OUT_DIR!\
 ) else (
-  for %%F in ("%DESKTOP%\release\staging\AguMaster-*-win-x64-setup.exe") do (
+  for %%F in ("%DESKTOP%\!OUT_DIR!\AguMaster-*-win-x64-setup.exe") do (
     echo Full path: %%~fF
     echo Size: %%~zF bytes
   )

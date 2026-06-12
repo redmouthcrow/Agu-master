@@ -40,8 +40,10 @@ const positionQtyInput = ref('');
 const costPriceInput = ref('');
 
 const refreshOptions = computed((): { value: RefreshFrequency; label: string }[] => [
-  { value: 60, label: t('config.refresh60') },
+  { value: 5, label: t('config.refresh5') },
+  { value: 15, label: t('config.refresh15') },
   { value: 30, label: t('config.refresh30') },
+  { value: 60, label: t('config.refresh60') },
 ]);
 
 function onAdd() {

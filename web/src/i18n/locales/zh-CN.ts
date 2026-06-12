@@ -45,6 +45,8 @@ export const zhCN = {
   'config.apiKeyConfigured': '已配置 {mask}',
   'config.model': 'Model',
   'config.refreshFrequency': '自动刷新档位（交易时段对齐触发）',
+  'config.refresh5': '5 分钟 · 高频',
+  'config.refresh15': '15 分钟 · 短线',
   'config.refresh60': '60 分钟 · 省 Token',
   'config.refresh30': '30 分钟 · 标准',
   'config.addWatchlist': '添加自选（股票 {stockCount}/5 · 基金 {fundCount}/5）',

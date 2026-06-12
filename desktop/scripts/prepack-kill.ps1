@@ -15,6 +15,7 @@ function Normalize-Path([string]$Value) {
 $desktop = Normalize-Path $DesktopRoot
 $release = Normalize-Path (Join-Path $DesktopRoot 'release')
 $staging = Normalize-Path (Join-Path $DesktopRoot 'release\staging')
+$stagingUnpacked = Normalize-Path (Join-Path $DesktopRoot 'release\staging\win-unpacked')
 
 function Close-ExplorerWindowsUnder([string]$Needle) {
   if ([string]::IsNullOrWhiteSpace($Needle)) {
@@ -51,8 +52,12 @@ Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
     ($path -like "*$release*") -or ($cmd -like "*$release*") -or
     ($path -like "*$staging*") -or ($cmd -like "*$staging*")
   )
+  $touchesRelease = ($path -like "*$release*") -or ($cmd -like "*$release*") -or
+    ($path -like "*$staging*") -or ($cmd -like "*$staging*") -or
+    ($path -like "*$stagingUnpacked*") -or ($cmd -like "*$stagingUnpacked*") -or
+    ($cmd -like "*app.asar*" -and $cmd -like "*$release*")
 
-  if ($isAgu -or $isProjectElectron -or $isReleaseElectron) {
+  if ($isAgu -or $isProjectElectron -or $isReleaseElectron -or $touchesRelease) {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     Write-Host "[prepack] stopped $name pid=$($_.ProcessId)"
   }

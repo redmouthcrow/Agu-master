@@ -48,6 +48,8 @@ export const enUS: Record<MessageKey, string> = {
   'config.apiKeyConfigured': 'Configured {mask}',
   'config.model': 'Model',
   'config.refreshFrequency': 'Auto refresh (exchange-aligned)',
+  'config.refresh5': '5 min · High frequency',
+  'config.refresh15': '15 min · Intraday',
   'config.refresh60': '60 min · Save tokens',
   'config.refresh30': '30 min · Standard',
   'config.addWatchlist': 'Add symbol (stocks {stockCount}/5 · funds {fundCount}/5)',
