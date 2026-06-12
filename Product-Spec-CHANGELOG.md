@@ -8,6 +8,21 @@
 
 ---
 
+## 2.1.2 - 2026-06-12
+
+### 变更类型：修改（补丁）
+
+### 修改功能
+- **配置持久化修复**：LiveSyncPayload 新增 `refreshFrequency` 字段，修复桌面版重启后刷新频率恢复为默认 30 分钟的 Bug
+- **配置保存按钮**：配置面板新增「保存配置」按钮，点击后显式确认（Toast「配置已保存」），解决用户不确定配置是否效的问题
+- **同步路径修复**：`buildLiveSyncPayload`、`applyLiveSync`、`applyConfigFromLiveSyncPayload` 补齐 `refreshFrequency` 字段的序列化/反序列化
+
+### 影响范围
+- Web + Desktop 共用 Vue；Desktop 需重新 `npm run build:main` 并打包
+- 文档：Product-Spec / README 同步至 2.1.2
+
+---
+
 ## 2.1.1 - 2026-06-11
 
 ### 变更类型：修改（补丁）
@@ -394,8 +409,8 @@
 
 ---
 
-**文档版本**：2.1.1
+**文档版本**：2.1.2
 
-**最后更新**：2026-06-11
+**最后更新**：2026-06-12
 
 **下次更新计划**：代码签名；自动更新（可选）

@@ -27,6 +27,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggle: [];
   save: [partial: Partial<AppConfig>];
+  saveConfig: [];
   refresh: [];
   syncCalendar: [];
   toast: [message: string];
@@ -141,6 +142,9 @@ function onAlwaysOnTopChange(e: Event) {
         @click="emit('refresh')"
       >
         {{ refreshing ? t('config.refreshing') : t('config.refreshNow') }}
+      </button>
+      <button type="button" class="btn-save" @click="emit('saveConfig')">
+        {{ t('config.saveConfig') }}
       </button>
     </div>
 

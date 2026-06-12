@@ -62,6 +62,8 @@ export const zhCN = {
   'config.exportBackupOk': '备份已保存至 {path}',
   'config.exportBackupFailed': '备份失败',
   'config.userDataHint': '配置保存在本机用户目录（不会打入安装包）；系统支持时 API Key 会加密存储。',
+  'config.saveConfig': '保存配置',
+  'config.saved': '配置已保存',
   'config.widgetOpacity': '窗口透明度 {percent}%',
   'config.widgetAlwaysOnTop': '始终置顶',
 

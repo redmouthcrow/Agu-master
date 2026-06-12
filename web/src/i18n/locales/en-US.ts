@@ -65,6 +65,8 @@ export const enUS: Record<MessageKey, string> = {
   'config.exportBackupOk': 'Backup saved to {path}',
   'config.exportBackupFailed': 'Backup failed',
   'config.userDataHint': 'Settings are stored locally (not in the installer). API key is encrypted when OS allows.',
+  'config.saveConfig': 'Save settings',
+  'config.saved': 'Settings saved',
   'config.widgetOpacity': 'Window opacity {percent}%',
   'config.widgetAlwaysOnTop': 'Always on top',
 

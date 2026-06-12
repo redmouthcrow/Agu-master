@@ -57,6 +57,7 @@ onMounted(() => {
     :try-add-symbol="addSymbol"
     @toggle="configOpen = !configOpen"
     @save="saveConfigField"
+    @save-config="saveConfigField({}); showToast(t('config.saved'))"
     @toast="showToast"
     @refresh="runRefresh(true)"
     @sync-calendar="initCalendar(true)"

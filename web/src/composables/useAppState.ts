@@ -243,6 +243,7 @@ function applyConfigFromLiveSyncPayload(live: LiveSyncPayload): boolean {
     ...config.value,
     baseUrl: live.config.baseUrl ?? config.value.baseUrl,
     model: live.config.model ?? config.value.model,
+    refreshFrequency: live.config.refreshFrequency ?? config.value.refreshFrequency,
     watchlist: migrateWatchlist(live.config.watchlist),
     widgetPinnedCodes: live.config.widgetPinnedCodes,
     widgetOpacity: live.config.widgetOpacity,
@@ -463,6 +464,7 @@ function buildLiveSyncPayload(): LiveSyncPayload {
     config: {
       baseUrl: config.value.baseUrl,
       model: config.value.model,
+      refreshFrequency: config.value.refreshFrequency,
       widgetPinnedCodes: config.value.widgetPinnedCodes,
       widgetOpacity: config.value.widgetOpacity,
       widgetAlwaysOnTop: config.value.widgetAlwaysOnTop,
@@ -524,6 +526,7 @@ function applyLiveSync(raw: LiveSyncPayload) {
     ...config.value,
     baseUrl: payload.config.baseUrl ?? config.value.baseUrl,
     model: payload.config.model ?? config.value.model,
+    refreshFrequency: payload.config.refreshFrequency ?? config.value.refreshFrequency,
     watchlist,
     widgetPinnedCodes: payload.config.widgetPinnedCodes,
     widgetOpacity: payload.config.widgetOpacity,

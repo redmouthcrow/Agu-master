@@ -109,6 +109,7 @@ export interface LiveSyncPayload {
     AppConfig,
     | 'baseUrl'
     | 'model'
+    | 'refreshFrequency'
     | 'widgetPinnedCodes'
     | 'widgetOpacity'
     | 'widgetAlwaysOnTop'

@@ -109,6 +109,7 @@ body {
 
 .btn-primary,
 .btn-secondary,
+.btn-save,
 .btn-ghost,
 .btn-link,
 .btn-remove {
@@ -136,6 +137,16 @@ body {
   color: var(--text);
   border-color: var(--border);
   padding: 0 16px;
+}
+
+.btn-save {
+  background: #389e0d;
+  color: #fff;
+  padding: 0 16px;
+}
+
+.btn-save:hover {
+  background: #4cb51a;
 }
 
 .btn-ghost {
