@@ -33,10 +33,12 @@ function aguLocalConfigPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',
   plugins: [vue(), aguLocalConfigPlugin()],
   server: {
+    host: '127.0.0.1',
     port: 5180,
-    strictPort: false,
-    open: true,
+    strictPort: process.env.AGU_DESKTOP === '1',
+    open: process.env.AGU_DESKTOP !== '1',
   },
 });

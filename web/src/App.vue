@@ -4,8 +4,9 @@ import ConfigPanel from './components/ConfigPanel.vue';
 import StockCard from './components/StockCard.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import { useAppState } from './composables/useAppState';
-import { MAX_FUNDS, MAX_STOCKS } from './types';
+import { applyDocumentTitle, useI18n } from './i18n';
 
+const { t } = useI18n();
 const stockInput = ref('');
 
 const {
@@ -21,6 +22,7 @@ const {
   toasts,
   hasApiKey,
   config,
+  isDesktop,
   saveConfigField,
   addSymbol,
   showToast,
@@ -30,9 +32,11 @@ const {
   runRefreshSymbol,
   initCalendar,
   bootstrap,
+  exportUserBackup,
 } = useAppState();
 
 onMounted(() => {
+  applyDocumentTitle();
   void bootstrap();
 });
 </script>
@@ -45,6 +49,7 @@ onMounted(() => {
     :has-api-key="hasApiKey"
     :storage-ok="storageOk"
     :using-file-config="usingFileConfig"
+    :is-desktop="isDesktop"
     :calendar-label="calendarLabel"
     :stock-count="stockCount"
     :fund-count="fundCount"
@@ -55,6 +60,7 @@ onMounted(() => {
     @toast="showToast"
     @refresh="runRefresh(true)"
     @sync-calendar="initCalendar(true)"
+  @export-backup="exportUserBackup"
   />
 
   <main class="main">
@@ -62,14 +68,14 @@ onMounted(() => {
       v-if="stockCount === 0 && fundCount === 0"
       class="empty-state"
     >
-      添加股票（最多 {{ MAX_STOCKS }}）或场内基金（最多 {{ MAX_FUNDS }}）开始监控
+      {{ t('empty.dualPool') }}
     </div>
 
     <template v-else>
       <section class="watch-section">
-        <h2 class="section-title">股票监控 ({{ stockCount }}/{{ MAX_STOCKS }})</h2>
+        <h2 class="section-title">{{ t('section.stock', { count: stockCount }) }}</h2>
         <div v-if="stockCards.length === 0" class="section-empty">
-          暂无股票，在上方输入框添加（如 600519）
+          {{ t('section.stockEmpty') }}
         </div>
         <div v-else class="grid">
           <StockCard
@@ -85,9 +91,9 @@ onMounted(() => {
       </section>
 
       <section class="watch-section">
-        <h2 class="section-title">基金监控 ({{ fundCount }}/{{ MAX_FUNDS }})</h2>
+        <h2 class="section-title">{{ t('section.fund', { count: fundCount }) }}</h2>
         <div v-if="fundCards.length === 0" class="section-empty">
-          暂无场内基金，在上方输入框添加（如 510500、159915）
+          {{ t('section.fundEmpty') }}
         </div>
         <div v-else class="grid">
           <StockCard

@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import type { AppConfig, RefreshFrequency } from '../types';
+import { computed, ref } from 'vue';
+import type { AppConfig, RefreshFrequency, WatchlistItem } from '../types';
 import { maskApiKey } from '../utils/display';
 import { parsePositionInputs } from '../utils/position';
+import {
+  MAX_WIDGET_PINNED,
+  MIN_WIDGET_PINNED,
+  clampWidgetOpacity,
+} from '../utils/widgetPin';
+import { useI18n } from '../i18n';
 
 const props = defineProps<{
   config: AppConfig;
@@ -11,6 +17,7 @@ const props = defineProps<{
   hasApiKey: boolean;
   storageOk: boolean;
   usingFileConfig: boolean;
+  isDesktop: boolean;
   calendarLabel: string;
   stockCount: number;
   fundCount: number;
@@ -23,21 +30,24 @@ const emit = defineEmits<{
   refresh: [];
   syncCalendar: [];
   toast: [message: string];
+  exportBackup: [];
 }>();
+
+const { t } = useI18n();
 
 const stockInput = defineModel<string>('stockInput', { default: '' });
 const positionQtyInput = ref('');
 const costPriceInput = ref('');
 
-const refreshOptions: { value: RefreshFrequency; label: string }[] = [
-  { value: 60, label: '60 分钟 · 省 Token' },
-  { value: 30, label: '30 分钟 · 标准' },
-];
+const refreshOptions = computed((): { value: RefreshFrequency; label: string }[] => [
+  { value: 60, label: t('config.refresh60') },
+  { value: 30, label: t('config.refresh30') },
+]);
 
 function onAdd() {
   const code = stockInput.value.trim();
   if (!code) {
-    emit('toast', '请先输入证券代码');
+    emit('toast', t('toast.enterCode'));
     return;
   }
 
@@ -61,17 +71,66 @@ function onRefreshFrequencyChange(e: Event) {
   const value = Number((e.target as HTMLSelectElement).value) as RefreshFrequency;
   emit('save', { refreshFrequency: value });
 }
+
+const pinnedSet = computed(
+  () => new Set(props.config.widgetPinnedCodes ?? []),
+);
+
+function watchlistLabel(item: WatchlistItem): string {
+  const pool =
+    item.instrumentType === 'stock'
+      ? t('common.stockPoolShort')
+      : t('common.fundPoolShort');
+  return `${item.name || item.code} (${pool})`;
+}
+
+function onPinToggle(code: string, checked: boolean) {
+  const current = [...(props.config.widgetPinnedCodes ?? [])];
+  if (checked) {
+    if (current.includes(code)) {
+      return;
+    }
+    if (current.length >= MAX_WIDGET_PINNED) {
+      emit('toast', t('toast.widgetPinMax', { max: MAX_WIDGET_PINNED }));
+      return;
+    }
+    current.push(code);
+  } else {
+    const idx = current.indexOf(code);
+    if (idx >= 0) {
+      current.splice(idx, 1);
+    }
+  }
+  emit('save', { widgetPinnedCodes: current });
+}
+
+function onOpacityInput(e: Event) {
+  const raw = Number((e.target as HTMLInputElement).value);
+  const opacity = clampWidgetOpacity(raw / 100);
+  window.aguDesktop?.setOpacity(opacity);
+}
+
+function onOpacityChange(e: Event) {
+  const raw = Number((e.target as HTMLInputElement).value);
+  emit('save', { widgetOpacity: clampWidgetOpacity(raw / 100) });
+}
+
+function onAlwaysOnTopChange(e: Event) {
+  emit('save', {
+    widgetAlwaysOnTop: (e.target as HTMLInputElement).checked,
+  });
+}
 </script>
 
 <template>
   <header class="config-header">
     <div class="config-bar">
       <button type="button" class="btn-ghost" @click="emit('toggle')">
-        {{ configOpen ? '收起配置' : '展开配置' }}
+        {{ configOpen ? t('config.toggleClose') : t('config.toggleOpen') }}
       </button>
       <span class="calendar-status">{{ calendarLabel }}</span>
       <button type="button" class="btn-link" @click="emit('syncCalendar')">
-        重新同步日历
+        {{ t('config.syncCalendar') }}
       </button>
       <button
         type="button"
@@ -79,23 +138,23 @@ function onRefreshFrequencyChange(e: Event) {
         :disabled="refreshing"
         @click="emit('refresh')"
       >
-        {{ refreshing ? '刷新中…' : '立即刷新' }}
+        {{ refreshing ? t('config.refreshing') : t('config.refreshNow') }}
       </button>
     </div>
 
     <div v-if="!storageOk" class="banner banner-warn">
-      本地存储不可用，刷新后数据将丢失
+      {{ t('config.storageWarn') }}
     </div>
     <div v-if="usingFileConfig" class="banner banner-info">
-      个人配置来自 web/agu.config.local.json（已忽略 Git）。修改后请重启开发服务。
+      {{ t('config.fileConfigInfo') }}
     </div>
     <div v-if="!hasApiKey" class="banner banner-warn">
-      请先配置 API Key
+      {{ t('config.apiKeyWarn') }}
     </div>
 
     <section v-show="configOpen" class="config-panel">
       <label class="field">
-        <span>API Base URL</span>
+        <span>{{ t('config.baseUrl') }}</span>
         <input
           :value="config.baseUrl"
           type="url"
@@ -104,7 +163,7 @@ function onRefreshFrequencyChange(e: Event) {
         />
       </label>
       <label class="field">
-        <span>API Key</span>
+        <span>{{ t('config.apiKey') }}</span>
         <input
           :value="config.apiKey"
           type="password"
@@ -113,11 +172,11 @@ function onRefreshFrequencyChange(e: Event) {
           @change="emit('save', { apiKey: ($event.target as HTMLInputElement).value })"
         />
         <span v-if="config.apiKey" class="field-hint">
-          已配置 {{ maskApiKey(config.apiKey) }}
+          {{ t('config.apiKeyConfigured', { mask: maskApiKey(config.apiKey) }) }}
         </span>
       </label>
       <label class="field">
-        <span>Model</span>
+        <span>{{ t('config.model') }}</span>
         <input
           :value="config.model"
           type="text"
@@ -126,7 +185,7 @@ function onRefreshFrequencyChange(e: Event) {
         />
       </label>
       <label class="field">
-        <span>自动刷新档位（交易时段对齐触发）</span>
+        <span>{{ t('config.refreshFrequency') }}</span>
         <select
           :value="config.refreshFrequency"
           class="field-select"
@@ -143,19 +202,21 @@ function onRefreshFrequencyChange(e: Event) {
       </label>
       <div class="add-row">
         <label class="field grow">
-          <span>添加自选（股票 {{ stockCount }}/5 · 基金 {{ fundCount }}/5）</span>
+          <span>{{
+            t('config.addWatchlist', { stockCount, fundCount })
+          }}</span>
           <input
             v-model="stockInput"
             type="text"
-            placeholder="600519 / 510500 / 159915"
+            :placeholder="t('config.addWatchlistPlaceholder')"
             @keyup.enter="onAdd"
           />
         </label>
-        <button type="button" class="btn-secondary" @click="onAdd">添加</button>
+        <button type="button" class="btn-secondary" @click="onAdd">{{ t('config.addBtn') }}</button>
       </div>
       <div class="add-row optional-row">
         <label class="field grow">
-          <span>持仓数量（可选，与成本成对填写）</span>
+          <span>{{ t('config.positionQty') }}</span>
           <input
             v-model="positionQtyInput"
             type="number"
@@ -166,7 +227,7 @@ function onRefreshFrequencyChange(e: Event) {
           />
         </label>
         <label class="field grow">
-          <span>成本价（可选，元，最多4位小数）</span>
+          <span>{{ t('config.positionCost') }}</span>
           <input
             v-model="costPriceInput"
             type="number"
@@ -177,6 +238,64 @@ function onRefreshFrequencyChange(e: Event) {
           />
         </label>
       </div>
+      <section v-if="isDesktop" class="desktop-settings">
+        <h3 class="settings-heading">{{ t('config.desktopSection') }}</h3>
+        <p class="field-hint">
+          {{ t('config.desktopPinHint', { total: stockCount + fundCount }) }}
+        </p>
+        <div v-if="config.watchlist.length === 0" class="field-hint">
+          {{ t('config.desktopPinEmpty') }}
+        </div>
+        <div v-else class="pin-list">
+          <label
+            v-for="item in config.watchlist"
+            :key="item.code"
+            class="pin-item"
+          >
+            <input
+              type="checkbox"
+              :checked="pinnedSet.has(item.code)"
+              @change="onPinToggle(item.code, ($event.target as HTMLInputElement).checked)"
+            />
+            <span>{{ watchlistLabel(item) }}</span>
+            <code class="pin-code">{{ item.code }}</code>
+          </label>
+        </div>
+        <p
+          v-if="(config.widgetPinnedCodes?.length ?? 0) > 0 && (config.widgetPinnedCodes?.length ?? 0) < MIN_WIDGET_PINNED"
+          class="field-hint warn-hint"
+        >
+          {{ t('config.desktopPinMinWarn') }}
+        </p>
+        <label class="field">
+          <span>{{
+            t('config.widgetOpacity', {
+              percent: Math.round((config.widgetOpacity ?? 0.9) * 100),
+            })
+          }}</span>
+          <input
+            type="range"
+            min="70"
+            max="100"
+            step="1"
+            :value="Math.round((config.widgetOpacity ?? 0.9) * 100)"
+            @input="onOpacityInput"
+            @change="onOpacityChange"
+          />
+        </label>
+        <label class="pin-item">
+          <input
+            type="checkbox"
+            :checked="config.widgetAlwaysOnTop !== false"
+            @change="onAlwaysOnTopChange"
+          />
+          <span>{{ t('config.widgetAlwaysOnTop') }}</span>
+        </label>
+        <p class="field-hint">{{ t('config.userDataHint') }}</p>
+        <button type="button" class="btn-secondary" @click="emit('exportBackup')">
+          {{ t('config.exportBackup') }}
+        </button>
+      </section>
     </section>
   </header>
 </template>

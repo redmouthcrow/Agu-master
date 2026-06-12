@@ -13,20 +13,20 @@ export interface BeijingTime {
   totalMinutes: number;
 }
 
-export function getBeijingTime(date = new Date()): BeijingTime {
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    weekday: 'short',
-    hour12: false,
-  });
+const beijingFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  weekday: 'short',
+  hour12: false,
+});
 
-  const parts = fmt.formatToParts(date);
+export function getBeijingTime(date = new Date()): BeijingTime {
+  const parts = beijingFormatter.formatToParts(date);
   const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? '0';
 
   const weekdayMap: Record<string, number> = {

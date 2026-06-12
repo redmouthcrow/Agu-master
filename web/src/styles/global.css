@@ -299,7 +299,9 @@ body {
 
 .stock-code {
   font-size: 12px;
+  font-weight: 400;
   color: var(--text-muted);
+  margin-left: 0.25rem;
 }
 
 .price-block {
@@ -485,6 +487,167 @@ body {
   padding: 12px 16px;
   border-radius: var(--radius);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+/* Config: desktop pin list */
+.desktop-settings {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+}
+
+.settings-heading {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pin-list {
+  display: grid;
+  gap: 6px;
+}
+
+.pin-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.pin-code {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.warn-hint {
+  color: #faad14;
+}
+
+/* Desktop widget transparent shell */
+html.widget-mode,
+html.widget-mode body,
+html.widget-mode #app {
+  background: transparent !important;
+  min-height: 0;
+  height: 100%;
+}
+
+html.widget-mode {
+  font-size: 14px;
+}
+
+/* Widget scrollbars — match dark UI tokens */
+html.widget-mode .widget-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+html.widget-mode .widget-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+html.widget-mode .widget-body::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px 0;
+}
+
+html.widget-mode .widget-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+html.widget-mode .widget-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: padding-box;
+}
+
+html.widget-mode .widget-body::-webkit-scrollbar-thumb:active {
+  background: var(--text-dim);
+  background-clip: padding-box;
+}
+
+/* Widget cards: compact type, height follows content */
+.stock-card-widget .card-inner {
+  min-height: 0;
+  height: auto;
+}
+
+.stock-card-widget .card-header {
+  padding: 6px 10px;
+  gap: 6px;
+}
+
+.stock-card-widget .stock-name {
+  font-size: 0.9rem;
+}
+
+.stock-card-widget .stock-code {
+  font-size: 11px;
+}
+
+.stock-card-widget .price {
+  font-size: 0.95rem;
+}
+
+.stock-card-widget .pct {
+  font-size: 0.78rem;
+}
+
+.stock-card-widget .btn-refresh {
+  min-width: 28px;
+  min-height: 28px;
+  font-size: 0.85rem;
+}
+
+.stock-card-widget .position-line {
+  padding: 3px 10px;
+  font-size: 11px;
+}
+
+.stock-card-widget .signal-bar {
+  min-height: 32px;
+  font-size: 0.92rem;
+  padding: 4px 6px;
+}
+
+.stock-card-widget .card-content {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  gap: 6px;
+  overflow: visible;
+}
+
+.stock-card-widget .line-clamp {
+  -webkit-line-clamp: 2;
+}
+
+.stock-card-widget .line-clamp-loose {
+  -webkit-line-clamp: 3;
+}
+
+.stock-card-widget .card-footer {
+  padding: 4px 10px;
+  font-size: 10px;
+}
+
+.stock-card-widget .card-overlay {
+  font-size: 0.9rem;
+}
+
+.stock-card-widget .btn-overlay {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 12px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,2 +1,51 @@
-# Local secrets and personal watchlist (see web/agu.config.example.json)
+# --- Local secrets & dev-only config ---
 web/agu.config.local.json
+web/.vite-desktop.log
+agu.config.local.json
+*.local
+
+# --- Dependencies (never commit) ---
+node_modules/
+**/node_modules/
+
+# --- Electron runtime (~180MB, from npm install; do not commit) ---
+**/node_modules/electron/dist/electron.exe
+
+# --- Frontend build output ---
+web/dist/
+web/dist-ssr/
+
+# --- Desktop: TypeScript compile output ---
+desktop/dist/
+
+# --- Desktop: electron-builder output (installers, unpacked app, often 80–180MB+) ---
+desktop/release/
+
+# --- Packaging intermediates (if outside release/) ---
+*.blockmap
+*.nsis.7z
+__uninstaller-nsis-*.exe
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- Editor / OS ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- Misc dev cache ---
+.agu-env-ready

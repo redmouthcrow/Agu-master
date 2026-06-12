@@ -6,6 +6,7 @@ const calendarKey = (year: number) => `trading_calendar_${year}`;
 
 let memoryDays: HolidayDay[] | null = null;
 let memoryYear: number | null = null;
+let memoryDayMap: Map<string, HolidayDay> | null = null;
 let calendarLoaded = false;
 let calendarFailed = false;
 
@@ -14,15 +15,24 @@ function weekdayFallback(date: Date): boolean {
   return weekday >= 1 && weekday <= 5;
 }
 
-function dayMap(days: HolidayDay[]): Map<string, HolidayDay> {
-  return new Map(days.map((d) => [d.date, d]));
+function setMemoryCalendar(days: HolidayDay[], year: number): void {
+  memoryDays = days;
+  memoryYear = year;
+  memoryDayMap = new Map(days.map((d) => [d.date, d]));
+}
+
+function dayMapForMemory(): Map<string, HolidayDay> | null {
+  if (!memoryDays || memoryDayMap == null) {
+    return null;
+  }
+  return memoryDayMap;
 }
 
 export function isTradingDay(date = new Date()): boolean {
-  const { dateStr, weekday } = getBeijingTime(date);
+  const { dateStr, weekday, year } = getBeijingTime(date);
 
-  if (memoryDays && memoryYear === getBeijingTime(date).year) {
-    const hit = dayMap(memoryDays).get(dateStr);
+  if (memoryDays && memoryYear === year) {
+    const hit = dayMapForMemory()?.get(dateStr);
     if (hit) {
       return !hit.isOffDay;
     }
@@ -33,12 +43,10 @@ export function isTradingDay(date = new Date()): boolean {
     return weekdayFallback(date);
   }
 
-  const year = getBeijingTime(date).year;
   const cached = getItem<TradingCalendarCache>(calendarKey(year));
   if (cached?.days?.length) {
-    memoryDays = cached.days;
-    memoryYear = year;
-    const hit = dayMap(cached.days).get(dateStr);
+    setMemoryCalendar(cached.days, year);
+    const hit = memoryDayMap?.get(dateStr);
     if (hit) {
       return !hit.isOffDay;
     }
@@ -102,8 +110,7 @@ export async function syncTradingCalendar(force = false): Promise<'ok' | 'failed
   if (!force && !shouldSync(year)) {
     const cached = getItem<TradingCalendarCache>(calendarKey(year));
     if (cached) {
-      memoryDays = cached.days;
-      memoryYear = year;
+      setMemoryCalendar(cached.days, year);
       calendarLoaded = true;
       calendarFailed = false;
       return 'ok';
@@ -140,8 +147,7 @@ export async function syncTradingCalendar(force = false): Promise<'ok' | 'failed
   }
 
   cleanupOldCalendars([year, year - 1]);
-  memoryDays = days;
-  memoryYear = year;
+  setMemoryCalendar(days, year);
   calendarLoaded = true;
   calendarFailed = false;
   return 'ok';

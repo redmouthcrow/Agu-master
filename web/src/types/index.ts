@@ -23,6 +23,12 @@ export interface AppConfig {
   model: string;
   refreshFrequency: RefreshFrequency;
   watchlist: WatchlistItem[];
+  /** Desktop widget: 1–4 codes from watchlist */
+  widgetPinnedCodes?: string[];
+  /** Desktop widget window opacity 0.70–1.00 */
+  widgetOpacity?: number;
+  /** Desktop widget always on top */
+  widgetAlwaysOnTop?: boolean;
 }
 
 export interface QuoteSnapshot {
@@ -88,3 +94,17 @@ export type CalendarSyncStatus =
   | { state: 'syncing' }
   | { state: 'ok'; year: number }
   | { state: 'failed' };
+
+/** Cross-window sync payload (dashboard → widget) */
+export interface LiveSyncPayload {
+  ts: number;
+  config: Pick<
+    AppConfig,
+    | 'widgetPinnedCodes'
+    | 'widgetOpacity'
+    | 'widgetAlwaysOnTop'
+    | 'apiKey'
+    | 'watchlist'
+  >;
+  cards: StockCardState[];
+}

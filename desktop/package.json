@@ -1,0 +1,85 @@
+{
+  "name": "agu-desktop",
+  "version": "2.0.0",
+  "private": true,
+  "author": "AguMaster",
+  "description": "AguMaster Win11 desktop shell (Electron)",
+  "main": "dist/main.js",
+  "scripts": {
+    "build:icons": "node scripts/build-icons.mjs",
+    "build:main": "npm run build:icons && npx --no-install tsc -p tsconfig.json",
+    "dev": "npm run build:main && npx --no-install electron .",
+    "start": "npx --no-install electron .",
+    "prepack:clean": "node scripts/prepack-clean.mjs",
+    "pack:builder": "npm run build:main && npm run build:web && npx --no-install electron-builder --win --x64",
+    "pack": "npm run prepack:clean && npm run pack:builder",
+    "pack:installer": "npm run pack",
+    "pack:portable": "npm run prepack:clean && npm run build:main && npm run build:web && npx --no-install electron-builder --win portable --x64",
+    "build:web": "npm run build --prefix ../web"
+  },
+  "build": {
+    "appId": "com.agu.desktop",
+    "productName": "AguMaster",
+    "copyright": "Copyright © AguMaster",
+    "compression": "maximum",
+    "asar": true,
+    "electronDist": "node_modules/electron/dist",
+    "directories": {
+      "output": "release/staging",
+      "buildResources": "img"
+    },
+    "files": [
+      "dist/**/*",
+      "img/tray-16.png",
+      "img/tray-32.png",
+      "img/icon-256.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "img",
+        "to": "img",
+        "filter": [
+          "*.png"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "img/icon-256.png",
+      "artifactName": "AguMaster-${version}-win-x64-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AguMaster",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "language": "2052"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "sharp": "^0.33.5",
+    "typescript": "~5.6.3"
+  }
+}

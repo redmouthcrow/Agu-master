@@ -1,4 +1,5 @@
 import type { WatchlistItem } from '../types';
+import { t } from '../i18n';
 
 export const COST_PRICE_DECIMALS = 4;
 export const COST_PRICE_MIN = 0.0001;
@@ -34,27 +35,27 @@ export function validatePositionPair(
     return null;
   }
   if (!hasQty || !hasCost) {
-    return '请同时填写持仓数量与成本价，或留空';
+    return t('position.pairRequired');
   }
   if (!Number.isInteger(positionQty) || positionQty <= 0 || positionQty > 999_999_999) {
-    return '持仓数量须为正整数';
+    return t('position.qtyInvalid');
   }
   if (costPrice! < COST_PRICE_MIN || costPrice! > COST_PRICE_MAX) {
-    return `成本价须在 ${COST_PRICE_MIN}–${COST_PRICE_MAX} 之间`;
+    return t('position.costRange', { min: COST_PRICE_MIN, max: COST_PRICE_MAX });
   }
   if (roundCostPrice(costPrice!) !== costPrice!) {
-    return '成本价最多保留4位小数';
+    return t('position.costDecimals');
   }
   return null;
 }
 
 function validateCostPriceString(costStr: string): string | null {
   if (!/^\d+(\.\d{1,4})?$/.test(costStr)) {
-    return '成本价格式无效，最多保留4位小数';
+    return t('position.costFormatInvalid');
   }
   const n = Number(costStr);
   if (!Number.isFinite(n) || n < COST_PRICE_MIN || n > COST_PRICE_MAX) {
-    return `成本价须在 ${COST_PRICE_MIN}–${COST_PRICE_MAX} 之间`;
+    return t('position.costRange', { min: COST_PRICE_MIN, max: COST_PRICE_MAX });
   }
   return null;
 }
@@ -96,12 +97,12 @@ export function parsePositionInputs(
   }
 
   if (!qtyStr || !costStr) {
-    return { error: '请同时填写持仓数量与成本价，或留空' };
+    return { error: t('position.pairRequired') };
   }
 
   const positionQty = parseOptionalNumber(qtyStr);
   if (positionQty === undefined) {
-    return { error: '持仓数量无效' };
+    return { error: t('position.qtyParseInvalid') };
   }
 
   const costErr = validateCostPriceString(costStr);

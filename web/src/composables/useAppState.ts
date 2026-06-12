@@ -5,13 +5,14 @@ import type {
   DiagnosisCacheEntry,
   DiagnosisResult,
   InstrumentType,
+  LiveSyncPayload,
   QuoteSnapshot,
   SessionLabel,
   StockCardState,
   WatchlistItem,
 } from '../types';
 import { MAX_FUNDS, MAX_STOCKS } from '../types';
-import { getItem, isStorageAvailable, setItem } from '../utils/storage';
+import { getItem, isStorageAvailable, setItem, activateDesktopStorageMirror, setDesktopMirrorEntry, registerDesktopFilePersist, registerDesktopCalendarCleanup, collectLegacyStorageForMigration } from '../utils/storage';
 import { inferInstrumentType, normalizeWatchlistSymbol } from '../utils/stockCode';
 import { buildSnapshotFingerprint } from '../utils/snapshotFingerprint';
 import {
@@ -31,79 +32,39 @@ import { createAlignScheduler } from '../services/scheduler';
 import { loadLocalUserConfig } from '../services/userConfig';
 import { normalizeRefreshFrequency } from '../utils/alignGrid';
 import { validatePositionPair, roundCostPrice } from '../utils/position';
+import { getAppMode, isDesktopRuntime } from '../utils/appMode';
+import {
+  clampWidgetOpacity,
+  sanitizeWidgetPinnedCodes,
+} from '../utils/widgetPin';
+import { cloneLiveSyncPayload, isNewerLiveSync } from '../utils/liveSync';
+import {
+  desktopStorageGet,
+  desktopStorageSet,
+  desktopCleanupCalendars,
+  loadDesktopUserData,
+  loadDesktopLiveSync,
+  migrateBrowserStorageToDesktop,
+  saveDesktopConfig,
+  saveDesktopDiagnosisCache,
+  saveDesktopLiveSync,
+  exportDesktopBackup,
+} from '../services/desktopPersistence';
+import { t } from '../i18n';
 
 const CONFIG_KEY = 'config';
 const DIAG_KEY = 'diagnosis_cache';
+const LIVE_SYNC_KEY = 'live_sync';
+const STORAGE_PREFIX = 'agu_';
 
-const defaultConfig: AppConfig = {
-  baseUrl: 'https://api.deepseek.com/v1',
-  apiKey: '',
-  model: 'deepseek-chat',
-  refreshFrequency: 30,
-  watchlist: [],
-};
+const appMode = getAppMode();
+const isPrimaryRunner = appMode !== 'widget';
 
-function migrateWatchlist(raw: WatchlistItem[]): WatchlistItem[] {
-  const withType = raw.map((item) => ({
-    ...item,
-    instrumentType:
-      item.instrumentType ?? inferInstrumentType(item.code),
-  }));
+let diagnosisCacheMemory: Record<string, DiagnosisCacheEntry> | null = null;
 
-  const stocks = withType.filter((i) => i.instrumentType === 'stock').slice(0, MAX_STOCKS);
-  const funds = withType.filter((i) => i.instrumentType === 'fund_etf').slice(0, MAX_FUNDS);
-  return [...stocks, ...funds];
-}
-
-const config = ref<AppConfig>(loadConfigFromStorage());
-const cards = ref<StockCardState[]>(buildCards(config.value.watchlist));
-const usingFileConfig = ref(false);
-const refreshing = ref(false);
-const configOpen = ref(false);
-const storageOk = ref(isStorageAvailable());
-const calendarStatus = ref<CalendarSyncStatus>({ state: 'idle' });
-
-const toasts = ref<{ id: number; message: string }[]>([]);
-let toastId = 0;
-let stopScheduler: (() => void) | null = null;
-
-function loadConfigFromStorage(): AppConfig {
-  const saved = getItem<AppConfig>(CONFIG_KEY);
-  const merged = { ...defaultConfig, ...saved };
-  const watchlist = migrateWatchlist(merged.watchlist ?? []);
-  return {
-    ...merged,
-    refreshFrequency: normalizeRefreshFrequency(merged.refreshFrequency),
-    watchlist,
-  };
-}
-
-async function applyLocalFileConfig(): Promise<void> {
-  const fileConfig = await loadLocalUserConfig();
-  if (!fileConfig) {
-    return;
-  }
-
-  usingFileConfig.value = true;
-  const watchlist = fileConfig.watchlist?.length
-    ? migrateWatchlist(fileConfig.watchlist)
-    : config.value.watchlist;
-
-  config.value = {
-    ...config.value,
-    ...fileConfig,
-    refreshFrequency: normalizeRefreshFrequency(
-      fileConfig.refreshFrequency ?? config.value.refreshFrequency,
-    ),
-    watchlist,
-  };
-  cards.value = buildCards(watchlist);
-}
-
-function loadDiagnosisCache(): Record<string, DiagnosisCacheEntry> {
-  const raw =
-    getItem<Record<string, DiagnosisCacheEntry | DiagnosisResult>>(DIAG_KEY) ??
-    {};
+function readDiagnosisCacheFromObject(
+  raw: Record<string, DiagnosisCacheEntry | DiagnosisResult>,
+): Record<string, DiagnosisCacheEntry> {
   const out: Record<string, DiagnosisCacheEntry> = {};
   for (const [code, entry] of Object.entries(raw)) {
     if ('fingerprint' in entry && entry.diagnosis) {
@@ -119,8 +80,22 @@ function loadDiagnosisCache(): Record<string, DiagnosisCacheEntry> {
   return out;
 }
 
+function readDiagnosisCacheFromStorage(): Record<string, DiagnosisCacheEntry> {
+  const raw =
+    getItem<Record<string, DiagnosisCacheEntry | DiagnosisResult>>(DIAG_KEY) ??
+    {};
+  return readDiagnosisCacheFromObject(raw);
+}
+
+function getDiagnosisCache(): Record<string, DiagnosisCacheEntry> {
+  if (!diagnosisCacheMemory) {
+    diagnosisCacheMemory = readDiagnosisCacheFromStorage();
+  }
+  return diagnosisCacheMemory;
+}
+
 function buildCards(watchlist: WatchlistItem[]): StockCardState[] {
-  const cache = loadDiagnosisCache();
+  const cache = getDiagnosisCache();
   return watchlist.map((stock) => {
     const cached = cache[stock.code];
     return {
@@ -138,22 +113,163 @@ function buildCards(watchlist: WatchlistItem[]): StockCardState[] {
   });
 }
 
+const defaultConfig: AppConfig = {
+  baseUrl: 'https://api.deepseek.com/v1',
+  apiKey: '',
+  model: 'deepseek-chat',
+  refreshFrequency: 30,
+  watchlist: [],
+  widgetPinnedCodes: [],
+  widgetOpacity: 0.9,
+  widgetAlwaysOnTop: true,
+};
+
+function migrateWatchlist(raw: WatchlistItem[]): WatchlistItem[] {
+  const withType = raw.map((item) => ({
+    ...item,
+    instrumentType:
+      item.instrumentType ?? inferInstrumentType(item.code),
+  }));
+
+  const stocks = withType.filter((i) => i.instrumentType === 'stock').slice(0, MAX_STOCKS);
+  const funds = withType.filter((i) => i.instrumentType === 'fund_etf').slice(0, MAX_FUNDS);
+  return [...stocks, ...funds];
+}
+
+const config = ref<AppConfig>(
+  isDesktopRuntime() ? { ...defaultConfig } : loadConfigFromStorage(),
+);
+const cards = ref<StockCardState[]>(buildCards(config.value.watchlist));
+const usingFileConfig = ref(false);
+const refreshing = ref(false);
+const configOpen = ref(false);
+const storageOk = ref(isStorageAvailable());
+const calendarStatus = ref<CalendarSyncStatus>({ state: 'idle' });
+
+const toasts = ref<{ id: number; message: string }[]>([]);
+let toastId = 0;
+let stopScheduler: (() => void) | null = null;
+let lastAppliedSyncTs = 0;
+let lastWidgetOpacity: number | null = null;
+let lastWidgetAlwaysOnTop: boolean | null = null;
+let diagnosisSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+const AI_REFRESH_CONCURRENCY = 2;
+
+function normalizeConfig(raw: Partial<AppConfig>): AppConfig {
+  const watchlist = migrateWatchlist(raw.watchlist ?? []);
+  const widgetPinnedCodes = sanitizeWidgetPinnedCodes(
+    raw.widgetPinnedCodes,
+    watchlist,
+  );
+  return {
+    ...defaultConfig,
+    ...raw,
+    refreshFrequency: normalizeRefreshFrequency(raw.refreshFrequency),
+    watchlist,
+    widgetPinnedCodes,
+    widgetOpacity: clampWidgetOpacity(raw.widgetOpacity),
+    widgetAlwaysOnTop: raw.widgetAlwaysOnTop ?? true,
+  };
+}
+
+function loadConfigFromStorage(): AppConfig {
+  const saved = getItem<AppConfig>(CONFIG_KEY);
+  return normalizeConfig({ ...defaultConfig, ...saved });
+}
+
+async function applyLocalFileConfig(): Promise<void> {
+  const fileConfig = await loadLocalUserConfig();
+  if (!fileConfig) {
+    return;
+  }
+
+  usingFileConfig.value = true;
+  const watchlist = fileConfig.watchlist?.length
+    ? migrateWatchlist(fileConfig.watchlist)
+    : config.value.watchlist;
+
+  config.value = normalizeConfig({
+    ...config.value,
+    ...fileConfig,
+    watchlist,
+  });
+  cards.value = buildCards(config.value.watchlist);
+}
+
 function countByType(type: InstrumentType): number {
   return config.value.watchlist.filter((i) => i.instrumentType === type).length;
+}
+
+function flushDiagnosisCache() {
+  const cache = getDiagnosisCache();
+  if (isDesktopRuntime()) {
+    void saveDesktopDiagnosisCache(cache);
+    return;
+  }
+  setItem(DIAG_KEY, cache);
+}
+
+async function flushDesktopPersistence(): Promise<void> {
+  if (!isDesktopRuntime() || !isPrimaryRunner || usingFileConfig.value) {
+    return;
+  }
+  if (diagnosisSaveTimer) {
+    clearTimeout(diagnosisSaveTimer);
+    diagnosisSaveTimer = null;
+  }
+  const payload = cloneLiveSyncPayload(buildLiveSyncPayload());
+  await Promise.all([
+    saveDesktopConfig(config.value),
+    saveDesktopDiagnosisCache(getDiagnosisCache()),
+    saveDesktopLiveSync(payload),
+  ]);
+}
+
+function applyConfigFromLiveSyncPayload(live: LiveSyncPayload): boolean {
+  if (!live.config.watchlist?.length) {
+    return false;
+  }
+  config.value = normalizeConfig({
+    ...defaultConfig,
+    ...config.value,
+    watchlist: migrateWatchlist(live.config.watchlist),
+    widgetPinnedCodes: live.config.widgetPinnedCodes,
+    widgetOpacity: live.config.widgetOpacity,
+    widgetAlwaysOnTop: live.config.widgetAlwaysOnTop,
+    apiKey: live.config.apiKey ?? config.value.apiKey,
+  });
+  if (live.cards?.length) {
+    cards.value = mergeCardsFromWatchlist(config.value.watchlist, live.cards);
+  } else {
+    cards.value = buildCards(config.value.watchlist);
+  }
+  return true;
 }
 
 function persistConfig() {
   if (usingFileConfig.value) {
     return;
   }
+  if (isDesktopRuntime()) {
+    void saveDesktopConfig(config.value);
+    return;
+  }
   if (!setItem(CONFIG_KEY, config.value)) {
-    showToast('本地存储写入失败');
+    showToast(t('toast.storageWriteFailed'));
   }
 }
 
 function persistDiagnosisEntry(code: string, entry: DiagnosisCacheEntry) {
-  const cache = loadDiagnosisCache();
+  const cache = getDiagnosisCache();
   cache[code] = entry;
+  if (isDesktopRuntime()) {
+    if (diagnosisSaveTimer) {
+      clearTimeout(diagnosisSaveTimer);
+    }
+    diagnosisSaveTimer = setTimeout(flushDiagnosisCache, 300);
+    return;
+  }
   setItem(DIAG_KEY, cache);
 }
 
@@ -196,7 +312,10 @@ async function refreshCardQuoteAndDiagnosis(
     ...snap,
     instrumentType: card.stock.instrumentType,
   };
-  card.stock.name = snap.name;
+  if (card.stock.name !== snap.name) {
+    card.stock.name = snap.name;
+    persistConfig();
+  }
 
   if (!hasApiKey.value || skipAi) {
     return 'no_api_key';
@@ -208,7 +327,7 @@ async function refreshCardQuoteAndDiagnosis(
     card.stock.positionQty,
     card.stock.costPrice,
   );
-  const cached = loadDiagnosisCache()[card.stock.code];
+  const cached = getDiagnosisCache()[card.stock.code];
   if (
     cached?.fingerprint &&
     cached.fingerprint === fingerprint &&
@@ -266,18 +385,229 @@ const fundCards = computed(() =>
   cards.value.filter((c) => c.stock.instrumentType === 'fund_etf'),
 );
 
+const pinnedCodes = computed(() =>
+  sanitizeWidgetPinnedCodes(
+    config.value.widgetPinnedCodes,
+    config.value.watchlist,
+  ),
+);
+
+const pinnedCards = computed(() =>
+  pinnedCodes.value
+    .map((code) => cards.value.find((c) => c.stock.code === code))
+    .filter((c): c is StockCardState => c != null),
+);
+
+const isDesktop = computed(() => isDesktopRuntime());
+
+function buildLiveSyncPayload(): LiveSyncPayload {
+  return {
+    ts: Date.now(),
+    config: {
+      widgetPinnedCodes: config.value.widgetPinnedCodes,
+      widgetOpacity: config.value.widgetOpacity,
+      widgetAlwaysOnTop: config.value.widgetAlwaysOnTop,
+      apiKey: config.value.apiKey,
+      watchlist: config.value.watchlist.map((w) => ({ ...w })),
+    },
+    cards: cards.value.map((c) => ({
+      ...c,
+      stock: { ...c.stock },
+      snapshot: c.snapshot ? { ...c.snapshot } : null,
+      diagnosis: c.diagnosis ? { ...c.diagnosis } : null,
+    })),
+  };
+}
+
+function mergeCardsFromWatchlist(
+  watchlist: WatchlistItem[],
+  syncedCards: StockCardState[],
+): StockCardState[] {
+  const byCode = new Map(syncedCards.map((c) => [c.stock.code, c]));
+  const existing = new Map(cards.value.map((c) => [c.stock.code, c]));
+
+  return watchlist.map((item) => {
+    const synced = byCode.get(item.code);
+    if (synced) {
+      return {
+        ...synced,
+        stock: { ...item, ...synced.stock, code: item.code },
+        snapshot: synced.snapshot ? { ...synced.snapshot } : null,
+        diagnosis: synced.diagnosis ? { ...synced.diagnosis } : null,
+      };
+    }
+    const prev = existing.get(item.code);
+    if (prev) {
+      return { ...prev, stock: { ...item } };
+    }
+    return buildCards([item])[0];
+  });
+}
+
+function broadcastLiveSync() {
+  const payload = cloneLiveSyncPayload(buildLiveSyncPayload());
+  if (isDesktopRuntime()) {
+    void saveDesktopLiveSync(payload);
+  } else {
+    setItem(LIVE_SYNC_KEY, payload);
+  }
+  window.aguDesktop?.broadcastLiveSync(payload);
+}
+
+function applyLiveSync(raw: LiveSyncPayload) {
+  if (!isNewerLiveSync(raw, lastAppliedSyncTs)) {
+    return;
+  }
+  lastAppliedSyncTs = raw.ts;
+  const payload = raw;
+  const watchlist = migrateWatchlist(payload.config.watchlist ?? config.value.watchlist);
+  config.value = normalizeConfig({
+    ...config.value,
+    watchlist,
+    widgetPinnedCodes: payload.config.widgetPinnedCodes,
+    widgetOpacity: payload.config.widgetOpacity,
+    widgetAlwaysOnTop: payload.config.widgetAlwaysOnTop,
+    apiKey: payload.config.apiKey ?? config.value.apiKey,
+  });
+  cards.value = mergeCardsFromWatchlist(watchlist, payload.cards);
+  applyWidgetWindowSettings();
+}
+
+function reloadWidgetStateFromStorage() {
+  const savedConfig = getItem<AppConfig>(CONFIG_KEY);
+  if (savedConfig) {
+    config.value = normalizeConfig({ ...defaultConfig, ...savedConfig });
+  }
+  const payload = getItem<LiveSyncPayload>(LIVE_SYNC_KEY);
+  if (payload) {
+    applyLiveSync(payload);
+    return;
+  }
+  cards.value = buildCards(config.value.watchlist);
+}
+
+function setupWidgetStorageListener() {
+  if (!isDesktopRuntime() || isPrimaryRunner) {
+    return;
+  }
+  // Electron 桌面版走 IPC，避免 storage 与 IPC 重复 apply
+  if (window.aguDesktop?.mode === 'widget') {
+    return;
+  }
+  window.addEventListener('storage', (event) => {
+    if (event.key === `${STORAGE_PREFIX}${LIVE_SYNC_KEY}` && event.newValue) {
+      try {
+        applyLiveSync(JSON.parse(event.newValue) as LiveSyncPayload);
+      } catch {
+        reloadWidgetStateFromStorage();
+      }
+      return;
+    }
+    if (event.key === `${STORAGE_PREFIX}${CONFIG_KEY}` && event.newValue) {
+      reloadWidgetStateFromStorage();
+    }
+  });
+}
+
+async function preloadDesktopCalendars(): Promise<void> {
+  const year = new Date().getFullYear();
+  for (const y of [year, year - 1]) {
+    const key = `trading_calendar_${y}`;
+    const cached = await desktopStorageGet<unknown>(key);
+    if (cached) {
+      setDesktopMirrorEntry(key, cached);
+    }
+  }
+}
+
+async function hydrateDesktopPersistence(): Promise<void> {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+
+  const legacyStorage = collectLegacyStorageForMigration();
+
+  if (isPrimaryRunner) {
+    let snap = await loadDesktopUserData();
+    const hasFileConfig = Boolean(
+      snap?.config?.watchlist?.length || snap?.config?.apiKey?.trim(),
+    );
+    const hasFileDiag = Boolean(
+      snap?.diagnosisCache && Object.keys(snap.diagnosisCache).length > 0,
+    );
+
+    if (!hasFileConfig && !hasFileDiag) {
+      await migrateBrowserStorageToDesktop();
+      snap = await loadDesktopUserData();
+    }
+
+    if (snap?.config) {
+      config.value = normalizeConfig({ ...defaultConfig, ...snap.config });
+    } else if (snap?.liveSync) {
+      applyConfigFromLiveSyncPayload(snap.liveSync);
+    }
+
+    if (snap?.diagnosisCache) {
+      diagnosisCacheMemory = readDiagnosisCacheFromObject(snap.diagnosisCache);
+    }
+    cards.value = buildCards(config.value.watchlist);
+  }
+
+  activateDesktopStorageMirror();
+  registerDesktopFilePersist((key, value) => {
+    void desktopStorageSet(key, value);
+  });
+  registerDesktopCalendarCleanup((keepYears) => {
+    void desktopCleanupCalendars(keepYears);
+  });
+
+  for (const [key, value] of Object.entries(legacyStorage)) {
+    if (key.startsWith('trading_calendar_')) {
+      setDesktopMirrorEntry(key, value);
+    }
+  }
+
+  await preloadDesktopCalendars();
+  storageOk.value = true;
+}
+
+async function bootstrapWidgetDesktopState(): Promise<void> {
+  activateDesktopStorageMirror();
+  await preloadDesktopCalendars();
+  const cached = await loadDesktopLiveSync();
+  if (cached && isNewerLiveSync(cached, lastAppliedSyncTs)) {
+    applyLiveSync(cached);
+  }
+}
+
+function applyWidgetWindowSettings() {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+  const opacity = clampWidgetOpacity(config.value.widgetOpacity);
+  const alwaysOnTop = config.value.widgetAlwaysOnTop ?? true;
+  if (lastWidgetOpacity !== opacity) {
+    lastWidgetOpacity = opacity;
+    window.aguDesktop?.setOpacity(opacity);
+  }
+  if (lastWidgetAlwaysOnTop !== alwaysOnTop) {
+    lastWidgetAlwaysOnTop = alwaysOnTop;
+    window.aguDesktop?.setAlwaysOnTop(alwaysOnTop);
+  }
+}
+
 const calendarLabel = computed(() => {
   const year = new Date().getFullYear();
   if (calendarStatus.value.state === 'syncing') {
-    return '同步中…';
+    return t('calendar.syncing');
   }
   if (calendarStatus.value.state === 'ok') {
-    return `交易日历 ${calendarStatus.value.year} 已同步`;
+    return t('calendar.ok', { year: calendarStatus.value.year });
   }
   if (getCalendarFailed()) {
-    return '同步失败（已降级为周一至周五）';
+    return t('calendar.failed');
   }
-  return `交易日历 ${year}`;
+  return t('calendar.year', { year });
 });
 
 export function useAppState() {
@@ -288,7 +618,7 @@ export function useAppState() {
       calendarStatus.value = { state: 'ok', year: new Date().getFullYear() };
     } else {
       calendarStatus.value = { state: 'failed' };
-      showToast('交易日历同步失败，已降级为周一至周五规则');
+      showToast(t('toast.calendarFailed'));
     }
   }
 
@@ -297,8 +627,19 @@ export function useAppState() {
     if (partial.refreshFrequency != null) {
       partial.refreshFrequency = normalizeRefreshFrequency(partial.refreshFrequency);
     }
-    config.value = { ...config.value, ...partial };
+    if (partial.widgetPinnedCodes != null) {
+      partial.widgetPinnedCodes = sanitizeWidgetPinnedCodes(
+        partial.widgetPinnedCodes,
+        config.value.watchlist,
+      );
+    }
+    if (partial.widgetOpacity != null) {
+      partial.widgetOpacity = clampWidgetOpacity(partial.widgetOpacity);
+    }
+    config.value = normalizeConfig({ ...config.value, ...partial });
     persistConfig();
+    applyWidgetWindowSettings();
+    broadcastLiveSync();
     if (
       partial.refreshFrequency != null &&
       partial.refreshFrequency !== prevFreq
@@ -334,18 +675,18 @@ export function useAppState() {
   ): boolean {
     const trimmed = input.trim();
     if (!trimmed) {
-      showToast('请先输入证券代码');
+      showToast(t('toast.enterCode'));
       return false;
     }
 
     const parsed = normalizeWatchlistSymbol(trimmed);
     if (!parsed) {
-      showToast('代码格式无效，请输入 A 股或场内 ETF/LOF 代码');
+      showToast(t('toast.invalidCode'));
       return false;
     }
 
     if (config.value.watchlist.some((s) => s.code === parsed.code)) {
-      showToast('该证券已在自选池');
+      showToast(t('toast.duplicate'));
       return false;
     }
 
@@ -354,15 +695,15 @@ export function useAppState() {
     if (current >= limit) {
       showToast(
         parsed.instrumentType === 'stock'
-          ? '股票已达上限 5 只'
-          : '基金已达上限 5 只',
+          ? t('toast.stockLimit')
+          : t('toast.fundLimit'),
       );
       return false;
     }
 
     const item: WatchlistItem = {
       code: parsed.code,
-      name: parsed.code,
+      name: '',
       market: parsed.market,
       instrumentType: parsed.instrumentType,
     };
@@ -370,19 +711,21 @@ export function useAppState() {
       return false;
     }
     config.value.watchlist.push(item);
+    const cache = getDiagnosisCache();
     cards.value.push({
       stock: item,
       snapshot: null,
-      diagnosis: loadDiagnosisCache()[item.code]?.diagnosis ?? null,
+      diagnosis: cache[item.code]?.diagnosis ?? null,
       quoteError: false,
       aiError: null,
       parseError: false,
       rawAiText: null,
       loading: false,
-      updatedAt: loadDiagnosisCache()[item.code]?.updatedAt || null,
+      updatedAt: cache[item.code]?.updatedAt || null,
       diagnosisReused: false,
     });
     persistConfig();
+    broadcastLiveSync();
     return true;
   }
 
@@ -401,41 +744,26 @@ export function useAppState() {
     }
     card.stock = { ...item };
     persistConfig();
+    broadcastLiveSync();
   }
 
   function removeSymbol(code: string) {
     config.value.watchlist = config.value.watchlist.filter((s) => s.code !== code);
+    config.value.widgetPinnedCodes = sanitizeWidgetPinnedCodes(
+      config.value.widgetPinnedCodes,
+      config.value.watchlist,
+    );
     cards.value = cards.value.filter((c) => c.stock.code !== code);
     persistConfig();
+    broadcastLiveSync();
   }
 
-  async function runRefreshSymbol(code: string) {
-    const card = cards.value.find((c) => c.stock.code === code);
-    if (!card || card.loading) {
+  async function runRefreshSymbol(_code: string) {
+    if (!isPrimaryRunner) {
+      window.aguDesktop?.requestRefresh();
       return;
     }
-
-    const trading = isTradingDay();
-    const session = getSessionLabel(trading);
-    const aligned = getAlignedTimeLabel(trading, new Date(), config.value.refreshFrequency);
-
-    card.loading = true;
-    try {
-      const quotes = await fetchQuotesWithFallback([code]);
-      const outcome = await refreshCardQuoteAndDiagnosis(
-        card,
-        quotes.get(code) ?? undefined,
-        session,
-        aligned,
-      );
-      if (outcome === 'reused') {
-        showToast(`${card.stock.name} 行情未变，已沿用缓存诊断`);
-      } else if (outcome === 'quote_error') {
-        showToast(`${card.stock.name} 行情获取失败`);
-      }
-    } finally {
-      card.loading = false;
-    }
+    await runRefresh(true);
   }
 
   async function runRefresh(manual: boolean) {
@@ -455,54 +783,92 @@ export function useAppState() {
       const codes = cards.value.map((c) => c.stock.code);
       const quotes = await fetchQuotesWithFallback(codes);
 
-      for (const card of cards.value) {
-        card.loading = true;
-      }
-
-      let stopAi = false;
+      const aiState = { stopAi: false };
       let reusedCount = 0;
+      let nextIndex = 0;
 
-      for (const card of cards.value) {
-        const snap = quotes.get(card.stock.code) ?? undefined;
-        const outcome = await refreshCardQuoteAndDiagnosis(
-          card,
-          snap,
-          session,
-          aligned,
-          stopAi,
-        );
+      async function refreshOne(card: StockCardState): Promise<void> {
+        card.loading = true;
+        try {
+          const snap = quotes.get(card.stock.code) ?? undefined;
+          const outcome = await refreshCardQuoteAndDiagnosis(
+            card,
+            snap,
+            session,
+            aligned,
+            aiState.stopAi,
+          );
 
-        if (outcome === 'auth_stop') {
-          stopAi = true;
-        }
-        if (outcome === 'reused') {
-          reusedCount += 1;
-        }
+          if (outcome === 'auth_stop') {
+            aiState.stopAi = true;
+          }
+          if (outcome === 'reused') {
+            reusedCount += 1;
+          }
 
-        card.loading = false;
-        if (
-          outcome !== 'quote_error' &&
-          outcome !== 'no_api_key' &&
-          !stopAi
-        ) {
-          await sleep(300);
+          if (
+            outcome !== 'quote_error' &&
+            outcome !== 'no_api_key' &&
+            outcome !== 'reused' &&
+            !aiState.stopAi
+          ) {
+            await sleep(300);
+          }
+        } finally {
+          card.loading = false;
         }
       }
+
+      async function worker(): Promise<void> {
+        while (nextIndex < cards.value.length) {
+          const card = cards.value[nextIndex];
+          nextIndex += 1;
+          await refreshOne(card);
+        }
+      }
+
+      const workers = Math.min(AI_REFRESH_CONCURRENCY, cards.value.length);
+      await Promise.all(Array.from({ length: workers }, () => worker()));
 
       if (manual && reusedCount > 0 && reusedCount === cards.value.length) {
-        showToast('行情未变，已沿用缓存诊断');
+        showToast(t('toast.reusedAll'));
       } else if (manual && reusedCount > 0) {
-        showToast(`${reusedCount} 只行情未变，已沿用缓存诊断`);
+        showToast(t('toast.reusedPartial', { count: reusedCount }));
       }
     } finally {
       refreshing.value = false;
+      broadcastLiveSync();
       if (manual) {
         restartScheduler();
       }
     }
   }
 
+  function setupPrimaryDesktopIpc() {
+    if (!isDesktopRuntime() || !isPrimaryRunner) {
+      return;
+    }
+    window.aguDesktop?.onRunRefresh(() => {
+      void runRefresh(true);
+    });
+    window.aguDesktop?.onPushSync(() => {
+      broadcastLiveSync();
+    });
+  }
+
+  function setupWidgetDesktopIpc() {
+    if (!isDesktopRuntime() || isPrimaryRunner) {
+      return;
+    }
+    window.aguDesktop?.onLiveSync((payload) => {
+      applyLiveSync(payload as LiveSyncPayload);
+    });
+  }
+
   function restartScheduler() {
+    if (!isPrimaryRunner) {
+      return;
+    }
     stopScheduler?.();
     stopScheduler = createAlignScheduler(() => {
       if (isInAutoTradingWindow(isTradingDay())) {
@@ -512,23 +878,62 @@ export function useAppState() {
   }
 
   function startScheduler() {
+    if (!isPrimaryRunner) {
+      return;
+    }
     restartScheduler();
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        // Tab 回到前台：仅重算下一对齐时刻，不补跑刷新
         restartScheduler();
       }
     });
   }
 
-  async function bootstrap() {
-    await applyLocalFileConfig();
-    await initCalendar(false);
-    startScheduler();
-    if (isInAutoTradingWindow(isTradingDay())) {
-      await runRefresh(false);
+  async function exportUserBackup() {
+    const result = await exportDesktopBackup();
+    if (result.ok && result.path) {
+      showToast(t('config.exportBackupOk', { path: result.path }));
+      return;
     }
+    showToast(t('config.exportBackupFailed'));
+  }
+
+  async function bootstrap() {
+    if (isDesktopRuntime()) {
+      if (isPrimaryRunner) {
+        await hydrateDesktopPersistence();
+        window.__aguFlushPersistence = flushDesktopPersistence;
+      } else {
+        await bootstrapWidgetDesktopState();
+      }
+    }
+
+    await applyLocalFileConfig();
+
+    if (isPrimaryRunner) {
+      await initCalendar(false);
+      setupPrimaryDesktopIpc();
+      startScheduler();
+      if (isInAutoTradingWindow(isTradingDay())) {
+        await runRefresh(false);
+      } else {
+        broadcastLiveSync();
+      }
+      applyWidgetWindowSettings();
+      return;
+    }
+
+    setupWidgetDesktopIpc();
+    setupWidgetStorageListener();
+    if (!isDesktopRuntime()) {
+      const cached = getItem<LiveSyncPayload>(LIVE_SYNC_KEY);
+      if (cached && isNewerLiveSync(cached, lastAppliedSyncTs)) {
+        applyLiveSync(cached);
+      }
+    }
+    window.aguDesktop?.requestSync();
+    applyWidgetWindowSettings();
   }
 
   return {
@@ -536,6 +941,8 @@ export function useAppState() {
     cards,
     stockCards,
     fundCards,
+    pinnedCards,
+    pinnedCodes,
     stockCount,
     fundCount,
     refreshing,
@@ -546,6 +953,8 @@ export function useAppState() {
     calendarLabel,
     toasts,
     hasApiKey,
+    isDesktop,
+    appMode,
     showToast,
     saveConfigField,
     addSymbol,
@@ -555,5 +964,6 @@ export function useAppState() {
     runRefresh,
     initCalendar,
     bootstrap,
+    exportUserBackup,
   };
 }

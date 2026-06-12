@@ -3,9 +3,12 @@ import { computed, ref } from 'vue';
 import type { StockCardState } from '../types';
 import { formatCostPrice, formatPct, formatPrice, getSignalTone } from '../utils/display';
 import { calcPnlPct, hasPosition, parsePositionInputs } from '../utils/position';
+import { useI18n } from '../i18n';
 
 const props = defineProps<{
   card: StockCardState;
+  /** 悬浮窗：只读，隐藏删除与持仓编辑 */
+  widgetMode?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -14,6 +17,8 @@ const emit = defineEmits<{
   updatePosition: [code: string, positionQty?: number, costPrice?: number];
   toast: [message: string];
 }>();
+
+const { t } = useI18n();
 
 const editingPosition = ref(false);
 const editQty = ref('');
@@ -24,12 +29,12 @@ const signalText = computed(() => {
     return '—';
   }
   if (props.card.aiError) {
-    return '诊断失败';
+    return t('card.diagnoseFailed');
   }
   if (props.card.parseError) {
-    return '解析失败';
+    return t('card.parseFailed');
   }
-  return props.card.diagnosis?.signal ?? '等待首次诊断…';
+  return props.card.diagnosis?.signal ?? t('card.waitDiagnosis');
 });
 
 const signalTone = computed(() =>
@@ -57,7 +62,10 @@ const positionLine = computed(() => {
   if (!hasPosition(props.card.stock)) {
     return null;
   }
-  const unit = props.card.stock.instrumentType === 'fund_etf' ? '份' : '股';
+  const unit =
+    props.card.stock.instrumentType === 'fund_etf'
+      ? t('common.fundUnit')
+      : t('common.stockUnit');
   const pnl = calcPnlPct(props.card.snapshot?.price, props.card.stock.costPrice!);
   return {
     qty: props.card.stock.positionQty,
@@ -80,6 +88,44 @@ const pnlClass = computed(() => {
   }
   return 'flat';
 });
+
+const footerTime = computed(() => {
+  if (!props.card.updatedAt) {
+    return null;
+  }
+  if (props.card.diagnosisReused) {
+    return t('card.reusedAt', { time: props.card.updatedAt });
+  }
+  return t('card.updatedAt', { time: props.card.updatedAt });
+});
+
+function isCodeLikeName(name: string, code: string): boolean {
+  const normalized = code.replace(/^(sh|sz|bj)/i, '');
+  return name === code || name === normalized || /^\d{6}$/.test(name);
+}
+
+const displayName = computed(() => {
+  const code = props.card.stock.code;
+  const snapName = props.card.snapshot?.name?.trim();
+  if (snapName && !isCodeLikeName(snapName, code)) {
+    return snapName;
+  }
+  const stored = props.card.stock.name?.trim();
+  if (stored && !isCodeLikeName(stored, code)) {
+    return stored;
+  }
+  if (snapName) {
+    return snapName;
+  }
+  if (stored) {
+    return stored;
+  }
+  return t('card.namePending');
+});
+
+const displayCode = computed(() =>
+  props.card.stock.code.replace(/^(sh|sz|bj)/i, ''),
+);
 
 function startEditPosition() {
   editQty.value =
@@ -115,12 +161,14 @@ function clearPosition() {
 </script>
 
 <template>
-  <article class="stock-card">
+  <article class="stock-card" :class="{ 'stock-card-widget': widgetMode }">
     <div class="card-inner">
       <header class="card-header">
         <div class="title-block">
-          <h2 class="stock-name">{{ card.stock.name }}</h2>
-          <span class="stock-code">{{ card.stock.code }}</span>
+          <h2 class="stock-name">
+            {{ displayName }}
+            <span class="stock-code">({{ displayCode }})</span>
+          </h2>
         </div>
         <div class="price-block">
           <div class="price tabular">{{ formatPrice(card.snapshot?.price) }}</div>
@@ -132,16 +180,17 @@ function clearPosition() {
           type="button"
           class="btn-refresh"
           :disabled="card.loading"
-          aria-label="刷新此证券"
-          title="刷新此证券"
+          :aria-label="t('card.refreshAria')"
+          :title="widgetMode ? t('card.refreshTitle') : t('card.refreshAria')"
           @click="emit('refresh', card.stock.code)"
         >
           ↻
         </button>
         <button
+          v-if="!widgetMode"
           type="button"
           class="btn-remove"
-          aria-label="删除自选"
+          :aria-label="t('card.removeAria')"
           @click="emit('remove', card.stock.code)"
         >
           ×
@@ -150,25 +199,35 @@ function clearPosition() {
 
       <div v-if="positionLine && !editingPosition" class="position-line">
         <span>
-          持仓 {{ positionLine.qty }}{{ positionLine.unit }} · 成本
+          {{ t('card.positionQty') }} {{ positionLine.qty }}{{ positionLine.unit }} ·
+          {{ t('card.positionCost') }}
           {{ formatCostPrice(positionLine.cost) }}
           <template v-if="positionLine.pnl !== null">
-            · 浮盈
+            · {{ t('card.positionPnl') }}
             <span class="tabular" :class="pnlClass">{{ formatPct(positionLine.pnl) }}</span>
           </template>
         </span>
-        <button type="button" class="btn-link btn-link-sm" @click="startEditPosition">
-          编辑
+        <button
+          v-if="!widgetMode"
+          type="button"
+          class="btn-link btn-link-sm"
+          @click="startEditPosition"
+        >
+          {{ t('common.edit') }}
         </button>
       </div>
 
-      <div v-if="editingPosition" class="position-edit">
-        <input v-model="editQty" type="number" min="1" step="1" placeholder="数量" />
-        <input v-model="editCost" type="number" min="0.0001" step="0.0001" placeholder="成本" />
-        <button type="button" class="btn-link btn-link-sm" @click="savePosition">保存</button>
-        <button type="button" class="btn-link btn-link-sm" @click="clearPosition">清空</button>
+      <div v-if="editingPosition && !widgetMode" class="position-edit">
+        <input v-model="editQty" type="number" min="1" step="1" placeholder="Qty" />
+        <input v-model="editCost" type="number" min="0.0001" step="0.0001" placeholder="Cost" />
+        <button type="button" class="btn-link btn-link-sm" @click="savePosition">
+          {{ t('common.save') }}
+        </button>
+        <button type="button" class="btn-link btn-link-sm" @click="clearPosition">
+          {{ t('common.clear') }}
+        </button>
         <button type="button" class="btn-link btn-link-sm" @click="editingPosition = false">
-          取消
+          {{ t('common.cancel') }}
         </button>
       </div>
 
@@ -178,49 +237,43 @@ function clearPosition() {
 
       <div class="card-content">
         <template v-if="card.quoteError">
-          <p class="muted">行情获取失败</p>
+          <p class="muted">{{ t('card.quoteFailed') }}</p>
         </template>
         <template v-else-if="card.parseError">
-          <p><span class="tag">[Raw]</span> {{ card.rawAiText }}</p>
+          <p><span class="tag">{{ t('card.tagRaw') }}</span> {{ card.rawAiText }}</p>
         </template>
         <template v-else-if="card.diagnosis">
           <p class="line-clamp">
-            <span class="tag">[形态]</span> {{ card.diagnosis.analysis }}
+            <span class="tag">{{ t('card.tagShape') }}</span> {{ card.diagnosis.analysis }}
           </p>
           <p class="line-clamp risk-text">
-            <span class="tag">[风险]</span> {{ card.diagnosis.risk }}
+            <span class="tag">{{ t('card.tagRisk') }}</span> {{ card.diagnosis.risk }}
           </p>
           <p v-if="card.diagnosis.action" class="line-clamp line-clamp-loose action-text">
-            操作建议：{{ card.diagnosis.action }}
+            {{ t('card.actionPrefix') }}{{ card.diagnosis.action }}
           </p>
         </template>
         <template v-else>
-          <p class="muted">等待首次诊断…</p>
+          <p class="muted">{{ t('card.waitDiagnosis') }}</p>
         </template>
       </div>
 
       <footer class="card-footer">
-        <span>合规声明：AI生成不构成投资建议</span>
-        <span v-if="card.updatedAt">
-          {{
-            card.diagnosisReused
-              ? `行情未变·沿用 ${card.updatedAt}`
-              : `更新于 ${card.updatedAt}`
-          }}
-        </span>
+        <span>{{ t('card.footerDisclaimer') }}</span>
+        <span v-if="footerTime">{{ footerTime }}</span>
       </footer>
 
       <div v-if="card.loading" class="card-overlay">
-        <span>诊断中…</span>
+        <span>{{ t('card.diagnosing') }}</span>
       </div>
       <div v-else-if="card.quoteError" class="card-overlay card-overlay-error">
-        <span>行情获取失败</span>
+        <span>{{ t('card.quoteFailed') }}</span>
         <button
           type="button"
           class="btn-secondary btn-overlay"
           @click="emit('refresh', card.stock.code)"
         >
-          重试
+          {{ t('common.retry') }}
         </button>
       </div>
     </div>
