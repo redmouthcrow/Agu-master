@@ -32,6 +32,15 @@ export const zhCN = {
   'card.reusedAt': '行情未变·沿用 {time}',
   'card.namePending': '获取名称中…',
 
+  'card.levelSupport': '支撑',
+  'card.levelResistance': '压力',
+  'card.klLocked': '🔒',
+  'card.klUnlocked': '🔓',
+  'card.klLockHint': '锁定后 AI 不再自动更新关键位',
+  'card.klPriceInvalid': '价格需为正数',
+  'card.klPricePlaceholder': '价格',
+  'card.klLabelPlaceholder': '标签（可选）',
+
   'config.toggleClose': '收起配置',
   'config.toggleOpen': '展开配置',
   'config.syncCalendar': '重新同步日历',
@@ -66,6 +75,13 @@ export const zhCN = {
   'config.saved': '配置已保存',
   'config.widgetOpacity': '窗口透明度 {percent}%',
   'config.widgetAlwaysOnTop': '始终置顶',
+
+  'config.alertSection': '桌面通知预警',
+  'config.alertEnabled': '启用桌面通知',
+  'config.alertPrice': '价格关键位突破',
+  'config.alertSignal': 'AI 高风险信号预警',
+  'config.alertAuthError': 'API Key 异常',
+  'config.alertQuoteError': '行情获取异常',
 
   'section.stock': '股票监控 ({count}/5)',
   'section.fund': '基金监控 ({count}/5)',

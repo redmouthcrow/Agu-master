@@ -16,6 +16,9 @@ const emit = defineEmits<{
   refresh: [code: string];
   updatePosition: [code: string, positionQty?: number, costPrice?: number];
   toast: [message: string];
+  addKeyLevel: [code: string, price: number, label: string];
+  removeKeyLevel: [code: string, index: number];
+  toggleKeyLevelsLock: [code: string];
 }>();
 
 const { t } = useI18n();
@@ -23,6 +26,10 @@ const { t } = useI18n();
 const editingPosition = ref(false);
 const editQty = ref('');
 const editCost = ref('');
+
+const addingKeyLevel = ref(false);
+const newKlPrice = ref('');
+const newKlLabel = ref('');
 
 const signalText = computed(() => {
   if (props.card.quoteError) {
@@ -99,6 +106,14 @@ const footerTime = computed(() => {
   return t('card.updatedAt', { time: props.card.updatedAt });
 });
 
+const keyLevels = computed(() => props.card.stock.keyLevels ?? []);
+
+const levelLabel = (level: { type: string; label: string }) => {
+  if (level.type === 'support') return t('card.levelSupport');
+  if (level.type === 'resistance') return t('card.levelResistance');
+  return level.label;
+};
+
 function isCodeLikeName(name: string, code: string): boolean {
   const normalized = code.replace(/^(sh|sz|bj)/i, '');
   return name === code || name === normalized || /^\d{6}$/.test(name);
@@ -158,6 +173,29 @@ function clearPosition() {
   emit('updatePosition', props.card.stock.code);
   editingPosition.value = false;
 }
+
+function startAddKeyLevel() {
+  newKlPrice.value = '';
+  newKlLabel.value = '';
+  addingKeyLevel.value = true;
+}
+
+function saveKeyLevel() {
+  const price = parseFloat(newKlPrice.value);
+  if (isNaN(price) || price <= 0) {
+    emit('toast', t('card.klPriceInvalid'));
+    return;
+  }
+  const label = newKlLabel.value.trim() || price.toFixed(3);
+  emit('addKeyLevel', props.card.stock.code, price, label);
+  addingKeyLevel.value = false;
+}
+
+const isKeyLevelsLocked = computed(() => props.card.stock.keyLevelsLocked === true);
+
+const customKeyLevelCount = computed(
+  () => props.card.stock.keyLevels?.filter((l) => l.source === 'manual').length ?? 0,
+);
 </script>
 
 <template>
@@ -227,6 +265,66 @@ function clearPosition() {
           {{ t('common.clear') }}
         </button>
         <button type="button" class="btn-link btn-link-sm" @click="editingPosition = false">
+          {{ t('common.cancel') }}
+        </button>
+      </div>
+
+      <div v-if="keyLevels.length > 0 || addingKeyLevel" class="key-levels">
+        <span
+          v-for="(level, idx) in keyLevels"
+          :key="idx"
+          class="kl-chip"
+          :class="{
+            'kl-support': level.type === 'support',
+            'kl-resistance': level.type === 'resistance',
+            'kl-custom': level.type === 'custom',
+          }"
+        >
+          {{ levelLabel(level) }} {{ level.price.toFixed(3) }}
+          <button
+            v-if="level.source === 'manual' && !widgetMode"
+            type="button"
+            class="kl-remove"
+            @click.stop="emit('removeKeyLevel', card.stock.code, idx)"
+          >×</button>
+        </span>
+        <template v-if="!widgetMode">
+          <button
+            v-if="!addingKeyLevel && customKeyLevelCount < 2"
+            type="button"
+            class="kl-add"
+            @click="startAddKeyLevel"
+          >+</button>
+          <button
+            v-if="keyLevels.length > 0"
+            type="button"
+            class="btn-link btn-link-sm"
+            :title="t('card.klLockHint')"
+            @click="emit('toggleKeyLevelsLock', card.stock.code)"
+          >
+            {{ isKeyLevelsLocked ? t('card.klLocked') : t('card.klUnlocked') }}
+          </button>
+        </template>
+      </div>
+
+      <div v-if="addingKeyLevel && !widgetMode" class="position-edit">
+        <input
+          v-model="newKlPrice"
+          type="number"
+          min="0.001"
+          step="0.001"
+          :placeholder="t('card.klPricePlaceholder')"
+        />
+        <input
+          v-model="newKlLabel"
+          type="text"
+          maxlength="10"
+          :placeholder="t('card.klLabelPlaceholder')"
+        />
+        <button type="button" class="btn-link btn-link-sm" @click="saveKeyLevel">
+          {{ t('common.save') }}
+        </button>
+        <button type="button" class="btn-link btn-link-sm" @click="addingKeyLevel = false">
           {{ t('common.cancel') }}
         </button>
       </div>

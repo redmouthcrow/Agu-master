@@ -28,6 +28,7 @@ const emit = defineEmits<{
   toggle: [];
   save: [partial: Partial<AppConfig>];
   saveConfig: [];
+  alertSettingsChange: [partial: Record<string, boolean>];
   refresh: [];
   syncCalendar: [];
   toast: [message: string];
@@ -301,6 +302,51 @@ function onAlwaysOnTopChange(e: Event) {
         <button type="button" class="btn-secondary" @click="emit('exportBackup')">
           {{ t('config.exportBackup') }}
         </button>
+        <section class="alert-settings">
+          <h3 class="settings-heading">{{ t('config.alertSection') }}</h3>
+          <label class="pin-item">
+            <input
+              type="checkbox"
+              :checked="(config.alertSettings?.enabled) !== false"
+              @change="emit('alertSettingsChange', { enabled: ($event.target as HTMLInputElement).checked })"
+            />
+            <span>{{ t('config.alertEnabled') }}</span>
+          </label>
+          <template v-if="(config.alertSettings?.enabled) !== false">
+            <label class="pin-item">
+              <input
+                type="checkbox"
+                :checked="(config.alertSettings?.priceAlert) !== false"
+                @change="emit('alertSettingsChange', { priceAlert: ($event.target as HTMLInputElement).checked })"
+              />
+              <span>{{ t('config.alertPrice') }}</span>
+            </label>
+            <label class="pin-item">
+              <input
+                type="checkbox"
+                :checked="(config.alertSettings?.signalAlert) !== false"
+                @change="emit('alertSettingsChange', { signalAlert: ($event.target as HTMLInputElement).checked })"
+              />
+              <span>{{ t('config.alertSignal') }}</span>
+            </label>
+            <label class="pin-item">
+              <input
+                type="checkbox"
+                :checked="(config.alertSettings?.authErrorAlert) !== false"
+                @change="emit('alertSettingsChange', { authErrorAlert: ($event.target as HTMLInputElement).checked })"
+              />
+              <span>{{ t('config.alertAuthError') }}</span>
+            </label>
+            <label class="pin-item">
+              <input
+                type="checkbox"
+                :checked="(config.alertSettings?.quoteErrorAlert) !== false"
+                @change="emit('alertSettingsChange', { quoteErrorAlert: ($event.target as HTMLInputElement).checked })"
+              />
+              <span>{{ t('config.alertQuoteError') }}</span>
+            </label>
+          </template>
+        </section>
       </section>
     </section>
   </header>

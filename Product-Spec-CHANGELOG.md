@@ -8,6 +8,41 @@
 
 ---
 
+## 2.2.0 - 2026-06-12
+
+### 变更类型：新增（次版本）
+
+### 新增功能
+- **功能 8：桌面通知预警系统（Electron 专属）**：
+  - **AI 自动关键位计算**：每次诊断 LLM 输出 `supportLevel` / `resistanceLevel`，自动写入证券配置（偏差保护 ±3%）
+  - **价格突破预警**：智能降频高频率监控（5/15 分钟档蹭主调度，30/60 分钟档 30s 独立轮询），价格穿透关键位时桌面弹窗
+  - **Signal 高风险弹窗**：固定词库（止损 / 逢高减仓 / 减仓 / 清仓）命中时触发
+  - **异常通知**：API Key 鉴权失败、行情全部失败时提醒
+  - **独立弹窗**：360×200 无边框半透明右下角小卡片，15s 自动消失，多条合并展示
+  - **配置开关**：每一种通知类型独立可控，含总开关
+- **AI增强 3**：关键位自动计算与预警
+- **附录 ADR-007**：智能降频价格监控架构决策
+
+### 修改功能
+- **功能 1**：配置对象新增 `alertSettings`；`WatchlistItem` 新增 `keyLevels` / `keyLevelsLocked`
+- **功能 4**：`DiagnosisResult` 新增 `supportLevel` / `resistanceLevel` 必填字段；System Prompt 扩展
+- **功能 7**：桌面悬浮与通知预警系统联动；新增 IPC 信道 `agu:send-alert`
+- **项目概述**：一句话描述补充桌面通知预警能力
+- **非功能性需求**：新增高频轮询 ≤ 1s、弹窗 ≤ 300ms 性能指标
+
+### 影响范围
+- Desktop 专属：高 — 新增 `alertService.ts`、主进程弹窗 IPC、独立调度器、关键位管理；需重新 `npm run build:main` 并打包
+- Web H5：低 — `DiagnosisResult` 扩展字段向后兼容，H5 忽略 `alertSettings` / `keyLevels`（TypeScript 标记可选）
+- 文档：Product-Spec / README / UI-Spec（附录 A Prompt 模板）同步至 2.2.0
+
+### 兼容性说明
+- 旧 `DiagnosisResult` 无 `supportLevel` / `resistanceLevel`：读取时默认 `null`，不参与关键位判定
+- 旧 `WatchlistItem` 无 `keyLevels`：新增字段可选，不影响现有自选数据
+- 旧配置无 `alertSettings`：默认全部启用
+- H5 浏览器版不受影响，通知功能静默跳过
+
+---
+
 ## 2.1.2 - 2026-06-12
 
 ### 变更类型：修改（补丁）
@@ -409,8 +444,8 @@
 
 ---
 
-**文档版本**：2.1.2
+**文档版本**：2.2.0
 
 **最后更新**：2026-06-12
 
-**下次更新计划**：代码签名；自动更新（可选）
+**下次更新计划**：实现桌面通知预警系统；代码签名；自动更新（可选）

@@ -1,4 +1,4 @@
-import type { AppConfig, DiagnosisCacheEntry, LiveSyncPayload } from './index';
+import type { AlertPayload, AppConfig, DiagnosisCacheEntry, LiveSyncPayload } from './index';
 
 export interface AguDesktopBridge {
   isDesktop: true;
@@ -37,6 +37,7 @@ export interface AguDesktopBridge {
     liveSync?: LiveSyncPayload | null;
   }) => Promise<boolean>;
   exportBackup: () => Promise<{ ok: boolean; path?: string }>;
+  sendAlert: (alerts: AlertPayload[]) => void;
 }
 
 declare global {

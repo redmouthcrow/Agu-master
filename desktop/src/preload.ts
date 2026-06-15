@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('aguDesktop', {
     ipcRenderer.invoke('agu:cleanup-calendars', keepYears),
   importMigration: (payload: unknown) => ipcRenderer.invoke('agu:import-migration', payload),
   exportBackup: () => ipcRenderer.invoke('agu:export-backup'),
+  sendAlert: (alerts: unknown) => ipcRenderer.send('agu:send-alert', alerts),
   onRunRefresh: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on('agu:run-refresh', handler);

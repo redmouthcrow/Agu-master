@@ -27,13 +27,16 @@ const SYSTEM_PROMPT_BASE = `# Role
 1. 操作提示 (signal)：必须从以下四个标准标签中根据量价诊断结果精确选择一个，严禁自行创造：“多头持股”、“逢高减仓”、“逢低做T”、“空仓观望”。
 2. 形态诊断 (analysis)：限 50 字以内。必须包含【一个显性量价特征】（如：30m放量滞涨）+【一个短期趋势推导】（如：向日内低点回踩测试支撑）。
 3. 风险预测 (risk)：限 50 字以内。必须指出明确的【右侧破位条件】或【动能衰竭信号】（如：一旦跌破今日低点XX元将引发多头踩踏，或：MACD 30m级别顶背离隐患）。
+4. 关键位 (supportLevel / resistanceLevel)：根据当前快照的 price、high、low、prevClose 及量价特征，推算最贴近当前价格的【近端技术支撑位】和【近端技术压力位】。单位为元，保留 3 位小数。支撑位应低于当前价，压力位应高于当前价。
 
 # Output Format
 必须严格按照以下 JSON 格式响应，不要包含任何 markdown 标记（如 \`\`\`json）或多余的解释文字：
 {
   "signal": "4字标准标签",
   "analysis": "高密度量价技术面诊断（不超过50字）",
-  "risk": "明确的破位或衰竭风险预测（不超过50字）"
+  "risk": "明确的破位或衰竭风险预测（不超过50字）",
+  "supportLevel": 6.12,
+  "resistanceLevel": 6.85
 }`;
 
 const SYSTEM_PROMPT_WITH_POSITION = `${SYSTEM_PROMPT_BASE}
@@ -44,7 +47,9 @@ const SYSTEM_PROMPT_WITH_POSITION = `${SYSTEM_PROMPT_BASE}
   "signal": "4字标准标签",
   "analysis": "高密度量价技术面诊断（不超过50字）",
   "risk": "明确的破位或衰竭风险预测（不超过50字）",
-  "action": "可执行持仓建议（不超过30字）"
+  "action": "可执行持仓建议（不超过30字）",
+  "supportLevel": 6.12,
+  "resistanceLevel": 6.85
 }`;
 
 function typeLabel(type: QuoteSnapshot['instrumentType']): string {
@@ -142,6 +147,14 @@ export async function runDiagnosis(
       return { ok: false, raw };
     }
     if (withPosition && (!parsed.action || parsed.action.length > 30)) {
+      return { ok: false, raw };
+    }
+    if (
+      parsed.supportLevel == null ||
+      parsed.resistanceLevel == null ||
+      typeof parsed.supportLevel !== 'number' ||
+      typeof parsed.resistanceLevel !== 'number'
+    ) {
       return { ok: false, raw };
     }
     return { ok: true, data: parsed };

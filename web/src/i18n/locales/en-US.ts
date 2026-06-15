@@ -34,6 +34,15 @@ export const enUS: Record<MessageKey, string> = {
   'card.reusedAt': 'Unchanged · cached {time}',
   'card.namePending': 'Loading name…',
 
+  'card.levelSupport': 'Support',
+  'card.levelResistance': 'Resist',
+  'card.klLocked': '🔒',
+  'card.klUnlocked': '🔓',
+  'card.klLockHint': 'Lock to prevent AI from auto-updating key levels',
+  'card.klPriceInvalid': 'Price must be positive',
+  'card.klPricePlaceholder': 'Price',
+  'card.klLabelPlaceholder': 'Label (optional)',
+
   'config.toggleClose': 'Hide settings',
   'config.toggleOpen': 'Show settings',
   'config.syncCalendar': 'Re-sync calendar',
@@ -69,6 +78,13 @@ export const enUS: Record<MessageKey, string> = {
   'config.saved': 'Settings saved',
   'config.widgetOpacity': 'Window opacity {percent}%',
   'config.widgetAlwaysOnTop': 'Always on top',
+
+  'config.alertSection': 'Desktop alerts',
+  'config.alertEnabled': 'Enable desktop notifications',
+  'config.alertPrice': 'Price level breakout',
+  'config.alertSignal': 'High-risk signal alert',
+  'config.alertAuthError': 'API Key error',
+  'config.alertQuoteError': 'Quote fetch error',
 
   'section.stock': 'Stocks ({count}/5)',
   'section.fund': 'Funds ({count}/5)',

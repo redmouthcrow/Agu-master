@@ -33,6 +33,10 @@ const {
   initCalendar,
   bootstrap,
   exportUserBackup,
+  updateAlertSettings,
+  addCustomKeyLevel,
+  removeCustomKeyLevel,
+  toggleKeyLevelsLock,
 } = useAppState();
 
 onMounted(() => {
@@ -58,6 +62,7 @@ onMounted(() => {
     @toggle="configOpen = !configOpen"
     @save="saveConfigField"
     @save-config="saveConfigField({}); showToast(t('config.saved'))"
+    @alert-settings-change="updateAlertSettings"
     @toast="showToast"
     @refresh="runRefresh(true)"
     @sync-calendar="initCalendar(true)"
@@ -86,6 +91,9 @@ onMounted(() => {
             @remove="removeSymbol"
             @refresh="runRefreshSymbol"
             @update-position="updateSymbolPosition"
+            @add-key-level="(code: string, price: number, label: string) => { addCustomKeyLevel(code, price, label); }"
+            @remove-key-level="(code: string, index: number) => { removeCustomKeyLevel(code, index); }"
+            @toggle-key-levels-lock="(code: string) => { toggleKeyLevelsLock(code); }"
             @toast="showToast"
           />
         </div>
@@ -104,6 +112,9 @@ onMounted(() => {
             @remove="removeSymbol"
             @refresh="runRefreshSymbol"
             @update-position="updateSymbolPosition"
+            @add-key-level="(code: string, price: number, label: string) => { addCustomKeyLevel(code, price, label); }"
+            @remove-key-level="(code: string, index: number) => { removeCustomKeyLevel(code, index); }"
+            @toggle-key-levels-lock="(code: string) => { toggleKeyLevelsLock(code); }"
             @toast="showToast"
           />
         </div>

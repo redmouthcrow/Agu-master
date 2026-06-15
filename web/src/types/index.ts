@@ -1,9 +1,47 @@
 export const MAX_STOCKS = 5;
 export const MAX_FUNDS = 5;
+export const MAX_KEY_LEVELS = 4;
 
 export type InstrumentType = 'stock' | 'fund_etf';
 export type Market = 'sh' | 'sz' | 'bj';
 export type RefreshFrequency = 5 | 15 | 30 | 60;
+export type KeyLevelType = 'support' | 'resistance' | 'custom';
+export type KeyLevelSource = 'ai' | 'manual';
+export type AlertType = 'price' | 'signal' | 'auth' | 'quote';
+
+export interface KeyLevel {
+  price: number;
+  label: string;
+  type: KeyLevelType;
+  source: KeyLevelSource;
+  updatedAt?: string;
+}
+
+export interface AlertSettings {
+  enabled: boolean;
+  priceAlert: boolean;
+  signalAlert: boolean;
+  authErrorAlert: boolean;
+  quoteErrorAlert: boolean;
+}
+
+export interface AlertPayload {
+  type: AlertType;
+  code: string;
+  name: string;
+  signal?: string;
+  keyLevel?: KeyLevel;
+  currentPrice?: number;
+}
+
+export const HIGH_RISK_SIGNALS: ReadonlySet<string> = new Set([
+  '止损',
+  '逢高减仓',
+  '减仓',
+  '清仓',
+]);
+
+export const KEY_LEVEL_DEVIATION_THRESHOLD = 0.03;
 
 export interface WidgetWindowBounds {
   x: number;
@@ -19,6 +57,8 @@ export interface WatchlistItem {
   instrumentType: InstrumentType;
   positionQty?: number;
   costPrice?: number;
+  keyLevels?: KeyLevel[];
+  keyLevelsLocked?: boolean;
 }
 
 /** @deprecated use WatchlistItem */
@@ -36,6 +76,8 @@ export interface AppConfig {
   widgetOpacity?: number;
   /** Desktop widget always on top */
   widgetAlwaysOnTop?: boolean;
+  /** Desktop alert notification settings */
+  alertSettings?: AlertSettings;
 }
 
 export interface QuoteSnapshot {
@@ -57,6 +99,8 @@ export interface DiagnosisResult {
   analysis: string;
   risk: string;
   action?: string;
+  supportLevel?: number;
+  resistanceLevel?: number;
 }
 
 export interface DiagnosisCacheEntry {
@@ -113,6 +157,7 @@ export interface LiveSyncPayload {
     | 'widgetPinnedCodes'
     | 'widgetOpacity'
     | 'widgetAlwaysOnTop'
+    | 'alertSettings'
     | 'apiKey'
     | 'watchlist'
   >;

@@ -1,5 +1,7 @@
 import { ref, computed } from 'vue';
 import type {
+  AlertPayload,
+  AlertSettings,
   AppConfig,
   CalendarSyncStatus,
   DiagnosisCacheEntry,
@@ -11,7 +13,7 @@ import type {
   StockCardState,
   WatchlistItem,
 } from '../types';
-import { MAX_FUNDS, MAX_STOCKS } from '../types';
+import { MAX_FUNDS, MAX_KEY_LEVELS, MAX_STOCKS } from '../types';
 import { getItem, isStorageAvailable, setItem, activateDesktopStorageMirror, setDesktopMirrorEntry, registerDesktopFilePersist, registerDesktopCalendarCleanup, collectLegacyStorageForMigration } from '../utils/storage';
 import { inferInstrumentType, normalizeWatchlistSymbol } from '../utils/stockCode';
 import { buildSnapshotFingerprint } from '../utils/snapshotFingerprint';
@@ -51,6 +53,13 @@ import {
   exportDesktopBackup,
 } from '../services/desktopPersistence';
 import { t } from '../i18n';
+import { collectAlertsFromRound, createAuthErrorAlert, resetBreakthroughDebounce } from '../services/alertService';
+import {
+  applyKeyLevelsFromDiagnosis,
+  toggleKeyLevelsLock,
+  addCustomKeyLevel,
+  removeCustomKeyLevel,
+} from '../utils/keyLevelManager';
 
 const CONFIG_KEY = 'config';
 const DIAG_KEY = 'diagnosis_cache';
@@ -59,6 +68,11 @@ const STORAGE_PREFIX = 'agu_';
 
 const appMode = getAppMode();
 const isPrimaryRunner = appMode !== 'widget';
+
+let lastPricesForBreakthrough = new Map<string, number>();
+let highFreqTimer: ReturnType<typeof setTimeout> | null = null;
+const HIGH_FREQ_INTERVAL_MS = 30_000;
+let authAlertSentThisRound = false;
 
 let diagnosisCacheMemory: Record<string, DiagnosisCacheEntry> | null = null;
 
@@ -122,6 +136,13 @@ const defaultConfig: AppConfig = {
   widgetPinnedCodes: [],
   widgetOpacity: 0.9,
   widgetAlwaysOnTop: true,
+  alertSettings: {
+    enabled: true,
+    priceAlert: true,
+    signalAlert: true,
+    authErrorAlert: true,
+    quoteErrorAlert: true,
+  },
 };
 
 function migrateWatchlist(raw: WatchlistItem[]): WatchlistItem[] {
@@ -247,8 +268,9 @@ function applyConfigFromLiveSyncPayload(live: LiveSyncPayload): boolean {
     watchlist: migrateWatchlist(live.config.watchlist),
     widgetPinnedCodes: live.config.widgetPinnedCodes,
     widgetOpacity: live.config.widgetOpacity,
-    widgetAlwaysOnTop: live.config.widgetAlwaysOnTop,
-    apiKey: live.config.apiKey ?? config.value.apiKey,
+      widgetAlwaysOnTop: live.config.widgetAlwaysOnTop,
+      alertSettings: live.config.alertSettings ?? config.value.alertSettings,
+      apiKey: live.config.apiKey ?? config.value.apiKey,
   });
   if (live.cards?.length) {
     cards.value = mergeCardsFromWatchlist(config.value.watchlist, live.cards);
@@ -370,6 +392,12 @@ async function refreshCardQuoteAndDiagnosis(
         fingerprint,
         updatedAt,
       });
+      applyKeyLevelsFromDiagnosis(
+        card.stock,
+        result.data.supportLevel,
+        result.data.resistanceLevel,
+        updatedAt,
+      );
       return 'ok';
     }
     card.parseError = true;
@@ -379,6 +407,10 @@ async function refreshCardQuoteAndDiagnosis(
     if (e instanceof LlmAuthError) {
       showToast(e.message);
       card.aiError = '诊断失败';
+      if (!authAlertSentThisRound) {
+        authAlertSentThisRound = true;
+        sendDesktopAlert([createAuthErrorAlert()]);
+      }
       return 'auth_stop';
     }
     card.aiError = '诊断失败';
@@ -468,6 +500,7 @@ function buildLiveSyncPayload(): LiveSyncPayload {
       widgetPinnedCodes: config.value.widgetPinnedCodes,
       widgetOpacity: config.value.widgetOpacity,
       widgetAlwaysOnTop: config.value.widgetAlwaysOnTop,
+      alertSettings: config.value.alertSettings,
       apiKey: config.value.apiKey,
       watchlist: config.value.watchlist.map((w) => ({ ...w })),
     },
@@ -530,8 +563,9 @@ function applyLiveSync(raw: LiveSyncPayload) {
     watchlist,
     widgetPinnedCodes: payload.config.widgetPinnedCodes,
     widgetOpacity: payload.config.widgetOpacity,
-    widgetAlwaysOnTop: payload.config.widgetAlwaysOnTop,
-    apiKey: payload.config.apiKey ?? config.value.apiKey,
+      widgetAlwaysOnTop: payload.config.widgetAlwaysOnTop,
+      alertSettings: payload.config.alertSettings ?? config.value.alertSettings,
+      apiKey: payload.config.apiKey ?? config.value.apiKey,
   });
   cards.value = mergeCardsFromWatchlist(watchlist, payload.cards);
   applyWidgetWindowSettings();
@@ -870,6 +904,7 @@ export function useAppState() {
     }
 
     refreshing.value = true;
+    authAlertSentThisRound = false;
     const trading = isTradingDay();
     const session = getSessionLabel(trading);
     const aligned = getAlignedTimeLabel(trading, new Date(), config.value.refreshFrequency);
@@ -931,6 +966,7 @@ export function useAppState() {
     } finally {
       refreshing.value = false;
       broadcastLiveSync();
+      checkAndSendAlerts(cards.value);
       if (manual) {
         restartScheduler();
       }
@@ -971,6 +1007,91 @@ export function useAppState() {
         void runRefresh(false);
       }
     }, config.value.refreshFrequency);
+    manageHighFreqScheduler();
+  }
+
+  function sendDesktopAlert(alerts: AlertPayload[]) {
+    if (alerts.length === 0) {
+      return;
+    }
+    window.aguDesktop?.sendAlert(alerts);
+  }
+
+  function checkAndSendAlerts(cards: StockCardState[]) {
+    if (!isDesktopRuntime()) {
+      return;
+    }
+    const alerts = collectAlertsFromRound(
+      cards,
+      config.value.alertSettings,
+      lastPricesForBreakthrough,
+    );
+    sendDesktopAlert(alerts);
+  }
+
+  function shouldRunHighFreq(): boolean {
+    const freq = config.value.refreshFrequency;
+    if (freq === 5 || freq === 15) {
+      return false;
+    }
+    const hasKeyLevels = config.value.watchlist.some(
+      (w) => w.keyLevels && w.keyLevels.length > 0,
+    );
+    if (!hasKeyLevels) {
+      return false;
+    }
+    return isInAutoTradingWindow(isTradingDay());
+  }
+
+  function stopHighFreqScheduler() {
+    if (highFreqTimer) {
+      clearTimeout(highFreqTimer);
+      highFreqTimer = null;
+    }
+  }
+
+  async function runHighFreqCheck() {
+    stopHighFreqScheduler();
+    if (!shouldRunHighFreq()) {
+      return;
+    }
+    try {
+      const codesWithKeyLevels = config.value.watchlist
+        .filter((w) => w.keyLevels && w.keyLevels.length > 0)
+        .map((w) => w.code);
+      if (codesWithKeyLevels.length === 0) {
+        return;
+      }
+      const quotes = await fetchQuotesWithFallback(codesWithKeyLevels);
+      const cardsToCheck = cards.value.filter((c) => quotes.has(c.stock.code));
+      if (cardsToCheck.length === 0) {
+        return;
+      }
+      const alerts = collectAlertsFromRound(
+        cardsToCheck,
+        config.value.alertSettings,
+        lastPricesForBreakthrough,
+      );
+      sendDesktopAlert(alerts);
+    } catch {
+      /* high-frequency poll failure is silent */
+    } finally {
+      if (shouldRunHighFreq()) {
+        highFreqTimer = setTimeout(runHighFreqCheck, HIGH_FREQ_INTERVAL_MS);
+      }
+    }
+  }
+
+  function manageHighFreqScheduler() {
+    if (!isPrimaryRunner) {
+      return;
+    }
+    if (shouldRunHighFreq()) {
+      stopHighFreqScheduler();
+      highFreqTimer = setTimeout(runHighFreqCheck, HIGH_FREQ_INTERVAL_MS);
+    } else {
+      stopHighFreqScheduler();
+    }
   }
 
   function startScheduler() {
@@ -1061,5 +1182,44 @@ export function useAppState() {
     initCalendar,
     bootstrap,
     exportUserBackup,
+    updateAlertSettings: (settings: Partial<AlertSettings>) => {
+      const current = config.value.alertSettings ?? { enabled: true, priceAlert: true, signalAlert: true, authErrorAlert: true, quoteErrorAlert: true };
+      config.value.alertSettings = { ...current, ...settings };
+      persistConfig();
+      broadcastLiveSync();
+    },
+    toggleKeyLevelsLock: (code: string) => {
+      const item = config.value.watchlist.find((w) => w.code === code);
+      if (!item) {
+        return;
+      }
+      toggleKeyLevelsLock(item);
+      persistConfig();
+      broadcastLiveSync();
+    },
+    addCustomKeyLevel: (code: string, price: number, label: string) => {
+      const item = config.value.watchlist.find((w) => w.code === code);
+      if (!item) {
+        return false;
+      }
+      const ok = addCustomKeyLevel(item, price, label);
+      if (ok) {
+        persistConfig();
+        broadcastLiveSync();
+      }
+      return ok;
+    },
+    removeCustomKeyLevel: (code: string, index: number) => {
+      const item = config.value.watchlist.find((w) => w.code === code);
+      if (!item) {
+        return false;
+      }
+      const ok = removeCustomKeyLevel(item, index);
+      if (ok) {
+        persistConfig();
+        broadcastLiveSync();
+      }
+      return ok;
+    },
   };
 }
