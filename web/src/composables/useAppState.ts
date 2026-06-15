@@ -13,7 +13,7 @@ import type {
   StockCardState,
   WatchlistItem,
 } from '../types';
-import { MAX_FUNDS, MAX_KEY_LEVELS, MAX_STOCKS } from '../types';
+import { MAX_FUNDS, MAX_STOCKS } from '../types';
 import { getItem, isStorageAvailable, setItem, activateDesktopStorageMirror, setDesktopMirrorEntry, registerDesktopFilePersist, registerDesktopCalendarCleanup, collectLegacyStorageForMigration } from '../utils/storage';
 import { inferInstrumentType, normalizeWatchlistSymbol } from '../utils/stockCode';
 import { buildSnapshotFingerprint } from '../utils/snapshotFingerprint';
@@ -53,7 +53,7 @@ import {
   exportDesktopBackup,
 } from '../services/desktopPersistence';
 import { t } from '../i18n';
-import { collectAlertsFromRound, createAuthErrorAlert, resetBreakthroughDebounce } from '../services/alertService';
+import { collectAlertsFromRound, createAuthErrorAlert } from '../services/alertService';
 import {
   applyKeyLevelsFromDiagnosis,
   toggleKeyLevelsLock,
@@ -325,6 +325,13 @@ type CardRefreshOutcome =
   | 'parse_error'
   | 'ai_error'
   | 'auth_stop';
+
+function sendDesktopAlert(alerts: AlertPayload[]) {
+  if (alerts.length === 0) {
+    return;
+  }
+  window.aguDesktop?.sendAlert(alerts);
+}
 
 async function refreshCardQuoteAndDiagnosis(
   card: StockCardState,
@@ -1008,13 +1015,6 @@ export function useAppState() {
       }
     }, config.value.refreshFrequency);
     manageHighFreqScheduler();
-  }
-
-  function sendDesktopAlert(alerts: AlertPayload[]) {
-    if (alerts.length === 0) {
-      return;
-    }
-    window.aguDesktop?.sendAlert(alerts);
   }
 
   function checkAndSendAlerts(cards: StockCardState[]) {

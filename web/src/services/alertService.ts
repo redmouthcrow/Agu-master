@@ -1,9 +1,7 @@
 import type {
   AlertPayload,
   AlertSettings,
-  KeyLevel,
   StockCardState,
-  WatchlistItem,
 } from '../types';
 import { HIGH_RISK_SIGNALS } from '../types';
 import { checkBreakthrough } from '../utils/keyLevelManager';
