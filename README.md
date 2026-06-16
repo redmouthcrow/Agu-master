@@ -56,35 +56,7 @@ start.bat
 
 ## 个人配置
 
-完整配置可通过两种方式修改：
-
-### 方式一：编辑 JSON 文件（推荐）
-
-编辑 `web/agu.config.local.json`（已加入 `.gitignore`）：
-
-```json
-{
-  "baseUrl": "https://api.deepseek.com/v1",
-  "apiKey": "sk-your-api-key-here",
-  "model": "deepseek-chat",
-  "refreshFrequency": 30,
-  "watchlist": [
-    { "code": "sh600519", "name": "贵州茅台", "market": "sh", "instrumentType": "stock" },
-    { "code": "sh510500", "name": "中证500ETF", "market": "sh", "instrumentType": "fund_etf" }
-  ],
-  "widgetPinnedCodes": ["sh510500"],
-  "groups": [
-    { "id": "group_1", "name": "短线", "order": 0, "collapsed": false }
-  ]
-}
-```
-
-- 也可使用 `watchlistCodes` 简写（仅代码数组），详见 `web/agu.config.example.json`
-- 修改后需**重启**生效
-
-### 方式二：界面配置
-
-在页面「展开配置」中填写 API Key、添加自选、创建分组，配置保存在本地存储，桌面版同步写入本地文件。
+在页面「展开配置」中填写 API Key、添加自选、创建分组。配置保存在本地存储（桌面版同步写入 `%APPDATA%/AguMaster/agu/config.json`），不会上传到任何服务器。
 
 ## 环境要求
 
