@@ -9,11 +9,12 @@ import type {
   InstrumentType,
   LiveSyncPayload,
   QuoteSnapshot,
+  RefreshMode,
   SessionLabel,
   StockCardState,
   WatchlistItem,
 } from '../types';
-import { MAX_FUNDS, MAX_STOCKS } from '../types';
+import { MAX_OVERCLOCK, MAX_SECURITIES } from '../types';
 import { getItem, isStorageAvailable, setItem, activateDesktopStorageMirror, setDesktopMirrorEntry, registerDesktopFilePersist, registerDesktopCalendarCleanup, collectLegacyStorageForMigration } from '../utils/storage';
 import { inferInstrumentType, normalizeWatchlistSymbol } from '../utils/stockCode';
 import { buildSnapshotFingerprint } from '../utils/snapshotFingerprint';
@@ -146,15 +147,13 @@ const defaultConfig: AppConfig = {
 };
 
 function migrateWatchlist(raw: WatchlistItem[]): WatchlistItem[] {
-  const withType = raw.map((item) => ({
-    ...item,
-    instrumentType:
-      item.instrumentType ?? inferInstrumentType(item.code),
-  }));
-
-  const stocks = withType.filter((i) => i.instrumentType === 'stock').slice(0, MAX_STOCKS);
-  const funds = withType.filter((i) => i.instrumentType === 'fund_etf').slice(0, MAX_FUNDS);
-  return [...stocks, ...funds];
+  return raw
+    .map((item) => ({
+      ...item,
+      instrumentType:
+        item.instrumentType ?? inferInstrumentType(item.code),
+    }))
+    .slice(0, MAX_SECURITIES);
 }
 
 const config = ref<AppConfig>(
@@ -219,9 +218,7 @@ async function applyLocalFileConfig(): Promise<void> {
   cards.value = buildCards(config.value.watchlist);
 }
 
-function countByType(type: InstrumentType): number {
-  return config.value.watchlist.filter((i) => i.instrumentType === type).length;
-}
+const watchlistCount = computed(() => config.value.watchlist.length);
 
 function flushDiagnosisCache() {
   const cache = getDiagnosisCache();
@@ -270,6 +267,7 @@ function applyConfigFromLiveSyncPayload(live: LiveSyncPayload): boolean {
     widgetOpacity: live.config.widgetOpacity,
       widgetAlwaysOnTop: live.config.widgetAlwaysOnTop,
       alertSettings: live.config.alertSettings ?? config.value.alertSettings,
+      groups: live.config.groups ?? config.value.groups,
       apiKey: live.config.apiKey ?? config.value.apiKey,
   });
   if (live.cards?.length) {
@@ -416,7 +414,9 @@ async function refreshCardQuoteAndDiagnosis(
       card.aiError = '诊断失败';
       if (!authAlertSentThisRound) {
         authAlertSentThisRound = true;
-        sendDesktopAlert([createAuthErrorAlert()]);
+        if (config.value.alertSettings?.enabled !== false && config.value.alertSettings?.authErrorAlert !== false) {
+          sendDesktopAlert([createAuthErrorAlert()]);
+        }
       }
       return 'auth_stop';
     }
@@ -471,17 +471,6 @@ async function refreshCardWithParseRetry(
 
 const hasApiKey = computed(() => config.value.apiKey.trim().length > 0);
 
-const stockCount = computed(() => countByType('stock'));
-const fundCount = computed(() => countByType('fund_etf'));
-
-const stockCards = computed(() =>
-  cards.value.filter((c) => c.stock.instrumentType === 'stock'),
-);
-
-const fundCards = computed(() =>
-  cards.value.filter((c) => c.stock.instrumentType === 'fund_etf'),
-);
-
 const pinnedCodes = computed(() =>
   sanitizeWidgetPinnedCodes(
     config.value.widgetPinnedCodes,
@@ -508,6 +497,7 @@ function buildLiveSyncPayload(): LiveSyncPayload {
       widgetOpacity: config.value.widgetOpacity,
       widgetAlwaysOnTop: config.value.widgetAlwaysOnTop,
       alertSettings: config.value.alertSettings,
+      groups: config.value.groups ? [...config.value.groups] : undefined,
       apiKey: config.value.apiKey,
       watchlist: config.value.watchlist.map((w) => ({ ...w })),
     },
@@ -572,6 +562,7 @@ function applyLiveSync(raw: LiveSyncPayload) {
     widgetOpacity: payload.config.widgetOpacity,
       widgetAlwaysOnTop: payload.config.widgetAlwaysOnTop,
       alertSettings: payload.config.alertSettings ?? config.value.alertSettings,
+      groups: payload.config.groups ?? config.value.groups,
       apiKey: payload.config.apiKey ?? config.value.apiKey,
   });
   cards.value = mergeCardsFromWatchlist(watchlist, payload.cards);
@@ -794,14 +785,8 @@ export function useAppState() {
       return false;
     }
 
-    const limit = parsed.instrumentType === 'stock' ? MAX_STOCKS : MAX_FUNDS;
-    const current = countByType(parsed.instrumentType);
-    if (current >= limit) {
-      showToast(
-        parsed.instrumentType === 'stock'
-          ? t('toast.stockLimit')
-          : t('toast.fundLimit'),
-      );
+    if (config.value.watchlist.length >= MAX_SECURITIES) {
+      showToast(t('toast.watchlistLimit', { max: MAX_SECURITIES }));
       return false;
     }
 
@@ -1029,15 +1014,16 @@ export function useAppState() {
     sendDesktopAlert(alerts);
   }
 
+  function hasOverclock(): boolean {
+    return config.value.watchlist.some((w) => w.refreshMode === 'overclock');
+  }
+
+  function getOverclockCount(): number {
+    return config.value.watchlist.filter((w) => w.refreshMode === 'overclock').length;
+  }
+
   function shouldRunHighFreq(): boolean {
-    const freq = config.value.refreshFrequency;
-    if (freq === 5 || freq === 15) {
-      return false;
-    }
-    const hasKeyLevels = config.value.watchlist.some(
-      (w) => w.keyLevels && w.keyLevels.length > 0,
-    );
-    if (!hasKeyLevels) {
+    if (!hasOverclock()) {
       return false;
     }
     return isInAutoTradingWindow(isTradingDay());
@@ -1056,23 +1042,32 @@ export function useAppState() {
       return;
     }
     try {
-      const codesWithKeyLevels = config.value.watchlist
-        .filter((w) => w.keyLevels && w.keyLevels.length > 0)
+      const overclockCodes = config.value.watchlist
+        .filter((w) => w.refreshMode === 'overclock')
         .map((w) => w.code);
-      if (codesWithKeyLevels.length === 0) {
+      if (overclockCodes.length === 0) {
         return;
       }
-      const quotes = await fetchQuotesWithFallback(codesWithKeyLevels);
+      const quotes = await fetchQuotesWithFallback(overclockCodes);
+      for (const card of cards.value) {
+        const snap = quotes.get(card.stock.code);
+        if (snap) {
+          card.snapshot = { ...snap, instrumentType: card.stock.instrumentType };
+          if (card.stock.name !== snap.name) {
+            card.stock.name = snap.name;
+          }
+        }
+      }
       const cardsToCheck = cards.value.filter((c) => quotes.has(c.stock.code));
-      if (cardsToCheck.length === 0) {
-        return;
+      if (cardsToCheck.length > 0) {
+        const alerts = collectAlertsFromRound(
+          cardsToCheck,
+          config.value.alertSettings,
+          lastPricesForBreakthrough,
+        );
+        sendDesktopAlert(alerts);
       }
-      const alerts = collectAlertsFromRound(
-        cardsToCheck,
-        config.value.alertSettings,
-        lastPricesForBreakthrough,
-      );
-      sendDesktopAlert(alerts);
+      broadcastLiveSync();
     } catch {
       /* high-frequency poll failure is silent */
     } finally {
@@ -1153,15 +1148,122 @@ export function useAppState() {
     applyWidgetWindowSettings();
   }
 
+  function cycleRefreshMode(code: string) {
+    const item = config.value.watchlist.find((w) => w.code === code);
+    if (!item) {
+      return;
+    }
+    const modes: RefreshMode[] = ['off', 'normal', 'overclock'];
+    const current = item.refreshMode || 'normal';
+    let nextIdx = modes.indexOf(current) + 1;
+    if (nextIdx >= modes.length) {
+      nextIdx = 0;
+    }
+    const next = modes[nextIdx];
+    if (next === 'overclock') {
+      if (!item.keyLevels || item.keyLevels.length === 0) {
+        showToast(t('toast.overclockNeedKeyLevels'));
+        return;
+      }
+      if (getOverclockCount() >= MAX_OVERCLOCK && current !== 'overclock') {
+        showToast(t('toast.overclockLimit', { max: MAX_OVERCLOCK }));
+        return;
+      }
+    }
+    item.refreshMode = next;
+    persistConfig();
+    broadcastLiveSync();
+    manageHighFreqScheduler();
+  }
+
+  function addGroup(name: string): boolean {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.length > 10) {
+      return false;
+    }
+    const groups = config.value.groups ?? [];
+    if (groups.some((g) => g.name === trimmed)) {
+      return false;
+    }
+    const id = `group_${Date.now()}`;
+    const maxOrder = groups.reduce((max, g) => Math.max(max, g.order), -1);
+    groups.push({ id, name: trimmed, order: maxOrder + 1, collapsed: false });
+    config.value.groups = groups;
+    persistConfig();
+    broadcastLiveSync();
+    return true;
+  }
+
+  function renameGroup(id: string, name: string): boolean {
+    const groups = config.value.groups;
+    if (!groups) {
+      return false;
+    }
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.length > 10) {
+      return false;
+    }
+    const group = groups.find((g) => g.id === id);
+    if (!group) {
+      return false;
+    }
+    if (groups.some((g) => g.id !== id && g.name === trimmed)) {
+      return false;
+    }
+    group.name = trimmed;
+    persistConfig();
+    broadcastLiveSync();
+    return true;
+  }
+
+  function removeGroup(id: string) {
+    const groups = config.value.groups;
+    if (!groups) {
+      return;
+    }
+    const idx = groups.findIndex((g) => g.id === id);
+    if (idx < 0) {
+      return;
+    }
+    groups.splice(idx, 1);
+    for (const item of config.value.watchlist) {
+      if (item.groupId === id) {
+        item.groupId = undefined;
+      }
+    }
+    persistConfig();
+    broadcastLiveSync();
+  }
+
+  function setSecurityGroup(code: string, groupId: string | undefined) {
+    const item = config.value.watchlist.find((w) => w.code === code);
+    if (!item) {
+      return;
+    }
+    item.groupId = groupId;
+    persistConfig();
+    broadcastLiveSync();
+  }
+
+  function toggleGroupCollapse(id: string) {
+    const groups = config.value.groups;
+    if (!groups) {
+      return;
+    }
+    const group = groups.find((g) => g.id === id);
+    if (!group) {
+      return;
+    }
+    group.collapsed = !group.collapsed;
+    persistConfig();
+  }
+
   return {
     config,
     cards,
-    stockCards,
-    fundCards,
     pinnedCards,
     pinnedCodes,
-    stockCount,
-    fundCount,
+    watchlistCount,
     refreshing,
     configOpen,
     storageOk,
@@ -1221,5 +1323,11 @@ export function useAppState() {
       }
       return ok;
     },
+    cycleRefreshMode,
+    addGroup,
+    renameGroup,
+    removeGroup,
+    setSecurityGroup,
+    toggleGroupCollapse,
   };
 }

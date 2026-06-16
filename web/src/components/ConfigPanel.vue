@@ -19,8 +19,7 @@ const props = defineProps<{
   usingFileConfig: boolean;
   isDesktop: boolean;
   calendarLabel: string;
-  stockCount: number;
-  fundCount: number;
+  watchlistCount: number;
   tryAddSymbol: (code: string, positionQty?: number, costPrice?: number) => boolean;
 }>();
 
@@ -210,7 +209,7 @@ function onAlwaysOnTopChange(e: Event) {
       <div class="add-row">
         <label class="field grow">
           <span>{{
-            t('config.addWatchlist', { stockCount, fundCount })
+            t('config.addWatchlist', { max: 20 })
           }}</span>
           <input
             v-model="stockInput"
@@ -248,7 +247,7 @@ function onAlwaysOnTopChange(e: Event) {
       <section v-if="isDesktop" class="desktop-settings">
         <h3 class="settings-heading">{{ t('config.desktopSection') }}</h3>
         <p class="field-hint">
-          {{ t('config.desktopPinHint', { total: stockCount + fundCount }) }}
+          {{ t('config.desktopPinHint', { total: watchlistCount }) }}
         </p>
         <div v-if="config.watchlist.length === 0" class="field-hint">
           {{ t('config.desktopPinEmpty') }}

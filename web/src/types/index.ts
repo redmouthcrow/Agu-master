@@ -1,10 +1,11 @@
-export const MAX_STOCKS = 5;
-export const MAX_FUNDS = 5;
+export const MAX_SECURITIES = 20;
 export const MAX_KEY_LEVELS = 4;
+export const MAX_OVERCLOCK = 5;
 
 export type InstrumentType = 'stock' | 'fund_etf';
 export type Market = 'sh' | 'sz' | 'bj';
 export type RefreshFrequency = 5 | 15 | 30 | 60;
+export type RefreshMode = 'off' | 'normal' | 'overclock';
 export type KeyLevelType = 'support' | 'resistance' | 'custom';
 export type KeyLevelSource = 'ai' | 'manual';
 export type AlertType = 'price' | 'signal' | 'auth' | 'quote';
@@ -43,6 +44,15 @@ export const HIGH_RISK_SIGNALS: ReadonlySet<string> = new Set([
 
 export const KEY_LEVEL_DEVIATION_THRESHOLD = 0.03;
 
+export interface UserGroup {
+  id: string;
+  name: string;
+  order: number;
+  collapsed: boolean;
+}
+
+export const DEFAULT_GROUP_ID = '__default__';
+
 export interface WidgetWindowBounds {
   x: number;
   y: number;
@@ -59,6 +69,8 @@ export interface WatchlistItem {
   costPrice?: number;
   keyLevels?: KeyLevel[];
   keyLevelsLocked?: boolean;
+  groupId?: string;
+  refreshMode?: RefreshMode;
 }
 
 /** @deprecated use WatchlistItem */
@@ -70,7 +82,8 @@ export interface AppConfig {
   model: string;
   refreshFrequency: RefreshFrequency;
   watchlist: WatchlistItem[];
-  /** Desktop widget: 1–4 codes from watchlist */
+  groups?: UserGroup[];
+  /** Desktop widget: 1–5 codes from watchlist */
   widgetPinnedCodes?: string[];
   /** Desktop widget window opacity 0.70–1.00 */
   widgetOpacity?: number;
@@ -158,6 +171,7 @@ export interface LiveSyncPayload {
     | 'widgetOpacity'
     | 'widgetAlwaysOnTop'
     | 'alertSettings'
+    | 'groups'
     | 'apiKey'
     | 'watchlist'
   >;

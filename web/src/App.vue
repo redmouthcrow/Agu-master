@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import ConfigPanel from './components/ConfigPanel.vue';
+import Sidebar from './components/Sidebar.vue';
 import StockCard from './components/StockCard.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import { useAppState } from './composables/useAppState';
+import { DEFAULT_GROUP_ID } from './types';
 import { applyDocumentTitle, useI18n } from './i18n';
 
 const { t } = useI18n();
 const stockInput = ref('');
+const sidebarCollapsed = ref(false);
 
 const {
-  stockCards,
-  fundCards,
-  stockCount,
-  fundCount,
+  cards,
+  watchlistCount,
   refreshing,
   configOpen,
   storageOk,
@@ -37,7 +38,44 @@ const {
   addCustomKeyLevel,
   removeCustomKeyLevel,
   toggleKeyLevelsLock,
+  cycleRefreshMode,
+  addGroup,
+  renameGroup,
+  removeGroup,
+  setSecurityGroup,
+  toggleGroupCollapse,
 } = useAppState();
+
+const groups = computed(() => config.value.groups ?? []);
+
+const ungroupedCount = computed(
+  () => config.value.watchlist.filter(
+    (w) => !w.groupId || w.groupId === DEFAULT_GROUP_ID,
+  ).length,
+);
+
+const groupedCards = computed(() => {
+  const result: { group: { id: string; name: string; collapsed: boolean } | null; cards: typeof cards.value }[] = [];
+  const sortedGroups = [...groups.value].sort((a, b) => a.order - b.order);
+  const handled = new Set<string>();
+
+  for (const group of sortedGroups) {
+    const groupCards = cards.value.filter((c) => c.stock.groupId === group.id);
+    if (groupCards.length > 0) {
+      for (const c of groupCards) {
+        handled.add(c.stock.code);
+      }
+      result.push({ group: { id: group.id, name: group.name, collapsed: group.collapsed }, cards: groupCards });
+    } else if (!group.collapsed) {
+      result.push({ group: { id: group.id, name: group.name, collapsed: false }, cards: [] });
+    }
+  }
+
+  const ungroupedCards = cards.value.filter((c) => !handled.has(c.stock.code));
+  result.push({ group: null, cards: ungroupedCards });
+
+  return result;
+});
 
 onMounted(() => {
   applyDocumentTitle();
@@ -46,85 +84,108 @@ onMounted(() => {
 </script>
 
 <template>
-  <ConfigPanel
-    :config="config"
-    :config-open="configOpen"
-    :refreshing="refreshing"
-    :has-api-key="hasApiKey"
-    :storage-ok="storageOk"
-    :using-file-config="usingFileConfig"
-    :is-desktop="isDesktop"
-    :calendar-label="calendarLabel"
-    :stock-count="stockCount"
-    :fund-count="fundCount"
-    v-model:stock-input="stockInput"
-    :try-add-symbol="addSymbol"
-    @toggle="configOpen = !configOpen"
-    @save="saveConfigField"
-    @save-config="saveConfigField({}); showToast(t('config.saved'))"
-    @alert-settings-change="updateAlertSettings"
-    @toast="showToast"
-    @refresh="runRefresh(true)"
-    @sync-calendar="initCalendar(true)"
-  @export-backup="exportUserBackup"
-  />
+  <div class="app-layout">
+    <Sidebar
+      :groups="groups"
+      :watchlist-count="watchlistCount"
+      :ungrouped-count="ungroupedCount"
+      :collapsed="sidebarCollapsed"
+      @toggle-collapse="sidebarCollapsed = !sidebarCollapsed"
+      @add-group="addGroup"
+      @rename-group="renameGroup"
+      @remove-group="removeGroup"
+    />
 
-  <main class="main">
-    <div
-      v-if="stockCount === 0 && fundCount === 0"
-      class="empty-state"
-    >
-      {{ t('empty.dualPool') }}
+    <div class="app-main">
+      <ConfigPanel
+        :config="config"
+        :config-open="configOpen"
+        :refreshing="refreshing"
+        :has-api-key="hasApiKey"
+        :storage-ok="storageOk"
+        :using-file-config="usingFileConfig"
+        :is-desktop="isDesktop"
+        :calendar-label="calendarLabel"
+        :watchlist-count="watchlistCount"
+        v-model:stock-input="stockInput"
+        :try-add-symbol="addSymbol"
+        @toggle="configOpen = !configOpen"
+        @save="saveConfigField"
+        @save-config="saveConfigField({}); showToast(t('config.saved'))"
+        @alert-settings-change="updateAlertSettings"
+        @toast="showToast"
+        @refresh="runRefresh(true)"
+        @sync-calendar="initCalendar(true)"
+        @export-backup="exportUserBackup"
+      />
+
+      <main class="main">
+        <div
+          v-if="watchlistCount === 0"
+          class="empty-state"
+        >
+          {{ t('empty.watchlist') }}
+        </div>
+
+        <template v-else>
+          <section
+            v-for="gc in groupedCards"
+            :key="gc.group?.id ?? '__ungrouped__'"
+            class="watch-section"
+          >
+            <h2
+              class="section-title"
+              :class="{ 'section-title-clickable': !!gc.group }"
+              @click="gc.group && toggleGroupCollapse(gc.group.id)"
+            >
+              {{ gc.group ? `${gc.group.name} (${gc.cards.length})` : t('sidebar.ungrouped') + ` (${gc.cards.length})` }}
+              <span v-if="gc.group?.collapsed" class="group-collapsed-mark">▶</span>
+            </h2>
+            <div
+              v-if="gc.cards.length === 0 && !gc.group?.collapsed"
+              class="section-empty"
+            >
+              {{ t('sidebar.groupEmpty') }}
+            </div>
+            <div v-else-if="gc.group?.collapsed" class="section-empty">
+              {{ t('sidebar.groupCollapsedHint') }}
+            </div>
+            <div v-else class="grid">
+              <StockCard
+                v-for="card in gc.cards"
+                :key="card.stock.code"
+                :card="card"
+                :groups="groups"
+                @remove="removeSymbol"
+                @refresh="runRefreshSymbol"
+                @update-position="updateSymbolPosition"
+                @add-key-level="(code: string, price: number, label: string) => { addCustomKeyLevel(code, price, label); }"
+                @remove-key-level="(code: string, index: number) => { removeCustomKeyLevel(code, index); }"
+                @toggle-key-levels-lock="(code: string) => { toggleKeyLevelsLock(code); }"
+                @cycle-refresh-mode="(code: string) => { cycleRefreshMode(code); }"
+                @set-group="(code: string, groupId: string | undefined) => { setSecurityGroup(code, groupId); }"
+                @toast="showToast"
+              />
+            </div>
+          </section>
+        </template>
+      </main>
     </div>
-
-    <template v-else>
-      <section class="watch-section">
-        <h2 class="section-title">{{ t('section.stock', { count: stockCount }) }}</h2>
-        <div v-if="stockCards.length === 0" class="section-empty">
-          {{ t('section.stockEmpty') }}
-        </div>
-        <div v-else class="grid">
-          <StockCard
-            v-for="card in stockCards"
-            :key="card.stock.code"
-            :card="card"
-            @remove="removeSymbol"
-            @refresh="runRefreshSymbol"
-            @update-position="updateSymbolPosition"
-            @add-key-level="(code: string, price: number, label: string) => { addCustomKeyLevel(code, price, label); }"
-            @remove-key-level="(code: string, index: number) => { removeCustomKeyLevel(code, index); }"
-            @toggle-key-levels-lock="(code: string) => { toggleKeyLevelsLock(code); }"
-            @toast="showToast"
-          />
-        </div>
-      </section>
-
-      <section class="watch-section">
-        <h2 class="section-title">{{ t('section.fund', { count: fundCount }) }}</h2>
-        <div v-if="fundCards.length === 0" class="section-empty">
-          {{ t('section.fundEmpty') }}
-        </div>
-        <div v-else class="grid">
-          <StockCard
-            v-for="card in fundCards"
-            :key="card.stock.code"
-            :card="card"
-            @remove="removeSymbol"
-            @refresh="runRefreshSymbol"
-            @update-position="updateSymbolPosition"
-            @add-key-level="(code: string, price: number, label: string) => { addCustomKeyLevel(code, price, label); }"
-            @remove-key-level="(code: string, index: number) => { removeCustomKeyLevel(code, index); }"
-            @toggle-key-levels-lock="(code: string) => { toggleKeyLevelsLock(code); }"
-            @toast="showToast"
-          />
-        </div>
-      </section>
-    </template>
-  </main>
+  </div>
 
   <ToastContainer :toasts="toasts" />
 </template>
 
 <style>
 @import './styles/global.css';
+
+.app-layout {
+  display: flex;
+  min-height: 100dvh;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+}
 </style>

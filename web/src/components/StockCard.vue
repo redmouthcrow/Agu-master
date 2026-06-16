@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { StockCardState } from '../types';
+import type { StockCardState, UserGroup } from '../types';
 import { formatCostPrice, formatPct, formatPrice, getSignalTone } from '../utils/display';
 import { calcPnlPct, hasPosition, parsePositionInputs } from '../utils/position';
 import { useI18n } from '../i18n';
 
 const props = defineProps<{
   card: StockCardState;
+  groups?: UserGroup[];
   /** 悬浮窗：只读，隐藏删除与持仓编辑 */
   widgetMode?: boolean;
 }>();
@@ -19,6 +20,8 @@ const emit = defineEmits<{
   addKeyLevel: [code: string, price: number, label: string];
   removeKeyLevel: [code: string, index: number];
   toggleKeyLevelsLock: [code: string];
+  cycleRefreshMode: [code: string];
+  setGroup: [code: string, groupId: string | undefined];
 }>();
 
 const { t } = useI18n();
@@ -193,6 +196,38 @@ function saveKeyLevel() {
 
 const isKeyLevelsLocked = computed(() => props.card.stock.keyLevelsLocked === true);
 
+const refreshModeLabel = computed(() => {
+  const mode = props.card.stock.refreshMode ?? 'normal';
+  if (mode === 'off') {
+    return t('card.refreshModeOff');
+  }
+  if (mode === 'overclock') {
+    return t('card.refreshModeOverclock');
+  }
+  return t('card.refreshModeNormal');
+});
+
+const refreshModeTitle = computed(() => {
+  const mode = props.card.stock.refreshMode ?? 'normal';
+  if (mode === 'off') {
+    return t('card.refreshModeOffTitle');
+  }
+  if (mode === 'overclock') {
+    return t('card.refreshModeOverclockTitle');
+  }
+  return t('card.refreshModeNormalTitle');
+});
+
+const currentGroupName = computed(() => {
+  const groups = props.groups;
+  const gid = props.card.stock.groupId;
+  if (!groups || !gid) {
+    return t('sidebar.ungrouped');
+  }
+  const g = groups.find((g) => g.id === gid);
+  return g ? g.name : t('sidebar.ungrouped');
+});
+
 const customKeyLevelCount = computed(
   () => props.card.stock.keyLevels?.filter((l) => l.source === 'manual').length ?? 0,
 );
@@ -214,6 +249,28 @@ const customKeyLevelCount = computed(
             {{ formatPct(card.snapshot?.changePct) }}
           </div>
         </div>
+        <button
+          v-if="!widgetMode"
+          type="button"
+          class="btn-refresh-mode"
+          :title="refreshModeTitle"
+          @click="emit('cycleRefreshMode', card.stock.code)"
+        >
+          {{ refreshModeLabel }}
+        </button>
+        <select
+          v-if="!widgetMode && groups && groups.length > 0"
+          class="group-select"
+          :value="card.stock.groupId ?? ''"
+          @change="emit('setGroup', card.stock.code, ($event.target as HTMLSelectElement).value || undefined)"
+        >
+          <option value="">{{ t('sidebar.ungrouped') }}</option>
+          <option
+            v-for="g in groups"
+            :key="g.id"
+            :value="g.id"
+          >{{ g.name }}</option>
+        </select>
         <button
           type="button"
           class="btn-refresh"

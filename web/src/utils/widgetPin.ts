@@ -1,7 +1,7 @@
 import type { WatchlistItem } from '../types';
 
 export const MIN_WIDGET_PINNED = 1;
-export const MAX_WIDGET_PINNED = 4;
+export const MAX_WIDGET_PINNED = 5;
 export const DEFAULT_WIDGET_OPACITY = 0.9;
 export const MIN_WIDGET_OPACITY = 0.7;
 export const MAX_WIDGET_OPACITY = 1;

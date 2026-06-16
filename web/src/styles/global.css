@@ -204,6 +204,15 @@ body {
   color: #ffffff;
 }
 
+.section-title-clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-title-clickable:hover {
+  color: #91caff;
+}
+
 .section-empty {
   color: var(--text-muted);
   font-size: 14px;
@@ -437,6 +446,47 @@ body {
 .btn-refresh:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.btn-refresh-mode {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  line-height: 1;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 5px;
+  cursor: pointer;
+}
+
+.btn-refresh-mode:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.group-select {
+  min-height: 28px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  max-width: 100px;
+  cursor: pointer;
+}
+
+.group-select:focus {
+  border-color: #1677ff;
+  outline: none;
+}
+
+.group-collapsed-mark {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-left: 6px;
 }
 
 .signal-bar {

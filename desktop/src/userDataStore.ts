@@ -27,6 +27,8 @@ export interface PersistedAppConfig {
   widgetPinnedCodes?: string[];
   widgetOpacity?: number;
   widgetAlwaysOnTop?: boolean;
+  alertSettings?: unknown;
+  groups?: unknown[];
 }
 
 export interface ConfigFilePayload {
