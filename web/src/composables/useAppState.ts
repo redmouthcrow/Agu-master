@@ -56,9 +56,9 @@ import { t } from '../i18n';
 import { collectAlertsFromRound, createAuthErrorAlert } from '../services/alertService';
 import {
   applyKeyLevelsFromDiagnosis,
-  toggleKeyLevelsLock,
-  addCustomKeyLevel,
-  removeCustomKeyLevel,
+  toggleKeyLevelsLock as toggleKlLock,
+  addCustomKeyLevel as addKl,
+  removeCustomKeyLevel as removeKl,
 } from '../utils/keyLevelManager';
 
 const CONFIG_KEY = 'config';
@@ -1193,7 +1193,7 @@ export function useAppState() {
       if (!item) {
         return;
       }
-      toggleKeyLevelsLock(item);
+      toggleKlLock(item);
       persistConfig();
       broadcastLiveSync();
     },
@@ -1202,7 +1202,7 @@ export function useAppState() {
       if (!item) {
         return false;
       }
-      const ok = addCustomKeyLevel(item, price, label);
+      const ok = addKl(item, price, label);
       if (ok) {
         persistConfig();
         broadcastLiveSync();
@@ -1214,7 +1214,7 @@ export function useAppState() {
       if (!item) {
         return false;
       }
-      const ok = removeCustomKeyLevel(item, index);
+      const ok = removeKl(item, index);
       if (ok) {
         persistConfig();
         broadcastLiveSync();
