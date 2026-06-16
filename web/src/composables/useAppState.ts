@@ -6,7 +6,6 @@ import type {
   CalendarSyncStatus,
   DiagnosisCacheEntry,
   DiagnosisResult,
-  InstrumentType,
   LiveSyncPayload,
   QuoteSnapshot,
   RefreshMode,

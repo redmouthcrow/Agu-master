@@ -218,16 +218,6 @@ const refreshModeTitle = computed(() => {
   return t('card.refreshModeNormalTitle');
 });
 
-const currentGroupName = computed(() => {
-  const groups = props.groups;
-  const gid = props.card.stock.groupId;
-  if (!groups || !gid) {
-    return t('sidebar.ungrouped');
-  }
-  const g = groups.find((g) => g.id === gid);
-  return g ? g.name : t('sidebar.ungrouped');
-});
-
 const customKeyLevelCount = computed(
   () => props.card.stock.keyLevels?.filter((l) => l.source === 'manual').length ?? 0,
 );

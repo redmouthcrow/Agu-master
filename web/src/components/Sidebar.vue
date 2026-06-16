@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import type { UserGroup } from '../types';
-import { DEFAULT_GROUP_ID } from '../types';
 import { useI18n } from '../i18n';
 
 const props = defineProps<{
