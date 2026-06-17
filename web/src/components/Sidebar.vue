@@ -228,13 +228,14 @@ function cancelRename() {
 .group-edit-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   padding: 0 12px 8px;
 }
 
 .group-edit-row .btn-link {
   flex-shrink: 0;
   margin: 0;
+  text-decoration: none;
 }
 
 .group-edit-input {
