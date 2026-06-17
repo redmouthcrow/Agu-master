@@ -73,9 +73,6 @@ export interface WatchlistItem {
   refreshMode?: RefreshMode;
 }
 
-/** @deprecated use WatchlistItem */
-export type StockItem = WatchlistItem;
-
 export interface AppConfig {
   baseUrl: string;
   apiKey: string;

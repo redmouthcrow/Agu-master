@@ -12,6 +12,11 @@ const CALENDAR_DIR = 'calendars';
 const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1';
 const DEFAULT_MODEL = 'deepseek-chat';
 
+/**
+ * Widget window position/size. Mirrors WidgetWindowBounds in
+ * web/src/types/index.ts. Kept duplicated (not imported cross-tree) to avoid
+ * coupling desktop's rootDir to the web/ tree. Keep in sync.
+ */
 export interface WidgetWindowBounds {
   x: number;
   y: number;

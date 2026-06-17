@@ -66,6 +66,11 @@ const DIAG_KEY = 'diagnosis_cache';
 const LIVE_SYNC_KEY = 'live_sync';
 const STORAGE_PREFIX = 'agu_';
 
+/** Delay between sequential AI diagnosis calls (avoid hammering the LLM). */
+const CARD_REFRESH_GAP_MS = 300;
+/** How long a toast stays visible. */
+const TOAST_TIMEOUT_MS = 4000;
+
 const appMode = getAppMode();
 const isPrimaryRunner = appMode !== 'widget';
 
@@ -198,6 +203,31 @@ function loadConfigFromStorage(): AppConfig {
   return normalizeConfig({ ...defaultConfig, ...saved });
 }
 
+/**
+ * Merge a live-sync config payload onto a base config, falling back to the
+ * base value for any field the payload omits. Used by both the desktop
+ * hydration path (base = defaults + current) and the live-sync apply path
+ * (base = current). watchlist must already be migrated by the caller.
+ */
+function mergeLiveConfig(
+  live: LiveSyncPayload['config'],
+  base: AppConfig,
+): AppConfig {
+  return normalizeConfig({
+    ...base,
+    baseUrl: live.baseUrl ?? base.baseUrl,
+    model: live.model ?? base.model,
+    refreshFrequency: live.refreshFrequency ?? base.refreshFrequency,
+    watchlist: live.watchlist ?? base.watchlist,
+    widgetPinnedCodes: live.widgetPinnedCodes,
+    widgetOpacity: live.widgetOpacity,
+    widgetAlwaysOnTop: live.widgetAlwaysOnTop,
+    alertSettings: live.alertSettings ?? base.alertSettings,
+    groups: live.groups ?? base.groups,
+    apiKey: live.apiKey ?? base.apiKey,
+  });
+}
+
 async function applyLocalFileConfig(): Promise<void> {
   const fileConfig = await loadLocalUserConfig();
   if (!fileConfig) {
@@ -255,20 +285,7 @@ function applyConfigFromLiveSyncPayload(live: LiveSyncPayload): boolean {
   if (!live.config.watchlist?.length) {
     return false;
   }
-  config.value = normalizeConfig({
-    ...defaultConfig,
-    ...config.value,
-    baseUrl: live.config.baseUrl ?? config.value.baseUrl,
-    model: live.config.model ?? config.value.model,
-    refreshFrequency: live.config.refreshFrequency ?? config.value.refreshFrequency,
-    watchlist: migrateWatchlist(live.config.watchlist),
-    widgetPinnedCodes: live.config.widgetPinnedCodes,
-    widgetOpacity: live.config.widgetOpacity,
-      widgetAlwaysOnTop: live.config.widgetAlwaysOnTop,
-      alertSettings: live.config.alertSettings ?? config.value.alertSettings,
-      groups: live.config.groups ?? config.value.groups,
-      apiKey: live.config.apiKey ?? config.value.apiKey,
-  });
+  config.value = mergeLiveConfig(live.config, { ...defaultConfig, ...config.value });
   if (live.cards?.length) {
     cards.value = mergeCardsFromWatchlist(config.value.watchlist, live.cards);
   } else {
@@ -311,7 +328,7 @@ function showToast(message: string) {
   toasts.value.push({ id, message });
   setTimeout(() => {
     toasts.value = toasts.value.filter((t) => t.id !== id);
-  }, 4000);
+  }, TOAST_TIMEOUT_MS);
 }
 
 type CardRefreshOutcome =
@@ -410,7 +427,7 @@ async function refreshCardQuoteAndDiagnosis(
   } catch (e) {
     if (e instanceof LlmAuthError) {
       showToast(e.message);
-      card.aiError = '诊断失败';
+      card.aiError = t('card.diagnoseFailed');
       if (!authAlertSentThisRound) {
         authAlertSentThisRound = true;
         if (config.value.alertSettings?.enabled !== false && config.value.alertSettings?.authErrorAlert !== false) {
@@ -419,7 +436,7 @@ async function refreshCardQuoteAndDiagnosis(
       }
       return 'auth_stop';
     }
-    card.aiError = '诊断失败';
+    card.aiError = t('card.diagnoseFailed');
     return 'ai_error';
   }
 }
@@ -549,22 +566,9 @@ function applyLiveSync(raw: LiveSyncPayload) {
     return;
   }
   lastAppliedSyncTs = raw.ts;
-  const payload = raw;
-  const watchlist = migrateWatchlist(payload.config.watchlist ?? config.value.watchlist);
-  config.value = normalizeConfig({
-    ...config.value,
-    baseUrl: payload.config.baseUrl ?? config.value.baseUrl,
-    model: payload.config.model ?? config.value.model,
-    refreshFrequency: payload.config.refreshFrequency ?? config.value.refreshFrequency,
-    watchlist,
-    widgetPinnedCodes: payload.config.widgetPinnedCodes,
-    widgetOpacity: payload.config.widgetOpacity,
-      widgetAlwaysOnTop: payload.config.widgetAlwaysOnTop,
-      alertSettings: payload.config.alertSettings ?? config.value.alertSettings,
-      groups: payload.config.groups ?? config.value.groups,
-      apiKey: payload.config.apiKey ?? config.value.apiKey,
-  });
-  cards.value = mergeCardsFromWatchlist(watchlist, payload.cards);
+  const watchlist = migrateWatchlist(raw.config.watchlist ?? config.value.watchlist);
+  config.value = mergeLiveConfig({ ...raw.config, watchlist }, config.value);
+  cards.value = mergeCardsFromWatchlist(watchlist, raw.cards);
   applyWidgetWindowSettings();
 }
 
@@ -874,16 +878,12 @@ export function useAppState() {
       );
 
       if (outcome !== 'quote_error' && outcome !== 'no_api_key' && outcome !== 'reused' && !aiState.stopAi) {
-        await sleep(300);
+        await sleep(CARD_REFRESH_GAP_MS);
       }
     } finally {
       card.loading = false;
       broadcastLiveSync();
     }
-  }
-
-  async function runRefreshSymbol(code: string) {
-    await runRefreshSingleCard(code);
   }
 
   async function runRefresh(manual: boolean) {
@@ -931,7 +931,7 @@ export function useAppState() {
             outcome !== 'reused' &&
             !aiState.stopAi
           ) {
-            await sleep(300);
+            await sleep(CARD_REFRESH_GAP_MS);
           }
         } finally {
           card.loading = false;
@@ -1278,7 +1278,7 @@ export function useAppState() {
     addSymbol,
     updateSymbolPosition,
     removeSymbol,
-    runRefreshSymbol,
+    runRefreshSymbol: runRefreshSingleCard,
     runRefresh,
     initCalendar,
     bootstrap,

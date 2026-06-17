@@ -8,13 +8,6 @@ export function activateDesktopStorageMirror(): void {
   desktopMirrorActive = true;
 }
 
-export function hydrateDesktopMirror(entries: Record<string, unknown>): void {
-  desktopMirror.clear();
-  for (const [key, value] of Object.entries(entries)) {
-    desktopMirror.set(key, value);
-  }
-}
-
 export function setDesktopMirrorEntry(key: string, value: unknown): void {
   desktopMirror.set(key, value);
 }
@@ -31,10 +24,6 @@ export function registerDesktopFilePersist(fn: DesktopFilePersistFn): void {
 
 export function registerDesktopCalendarCleanup(fn: DesktopCalendarCleanupFn): void {
   desktopCalendarCleanup = fn;
-}
-
-export function getDesktopMirrorEntry<T>(key: string): T | undefined {
-  return desktopMirror.get(key) as T | undefined;
 }
 
 export function isStorageAvailable(): boolean {

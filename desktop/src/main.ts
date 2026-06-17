@@ -38,6 +38,12 @@ let alertWindow: BrowserWindow | null = null;
 let alertDismissTimer: ReturnType<typeof setTimeout> | null = null;
 let tray: Tray | null = null;
 
+/**
+ * IPC payload for desktop alerts. Structurally mirrors `AlertPayload` in
+ * web/src/types/index.ts but uses a looser keyLevel shape (raw IPC JSON, no
+ * enum-typed KeyLevel). Keep the two in sync if the contract changes.
+ * (Not imported cross-tree to avoid coupling desktop's rootDir to web/.)
+ */
 interface AlertPayload {
   type: 'price' | 'signal' | 'auth' | 'quote';
   code: string;
