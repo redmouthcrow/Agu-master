@@ -26,6 +26,7 @@ export const zhCN = {
   'card.actionPrefix': '操作建议：',
   'card.bandActionPrefix': '波段建议：',
   'card.shortActionPrefix': '短期建议：',
+  'card.buildPositionAdvicePrefix': '建仓建议：',
   'card.positionQty': '持仓',
   'card.positionCost': '成本',
   'card.positionPnl': '浮盈',

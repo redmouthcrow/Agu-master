@@ -394,12 +394,17 @@ const customKeyLevelCount = computed(
           <p class="line-clamp risk-text">
             <span class="tag">{{ t('card.tagRisk') }}</span> {{ card.diagnosis.risk }}
           </p>
-          <p v-if="card.diagnosis.bandAction" class="line-clamp line-clamp-loose action-text">
-            {{ t('card.bandActionPrefix') }}{{ card.diagnosis.bandAction }}
+          <p v-if="card.diagnosis.buildPositionAdvice" class="line-clamp line-clamp-loose action-text">
+            {{ t('card.buildPositionAdvicePrefix') }}{{ card.diagnosis.buildPositionAdvice }}
           </p>
-          <p v-if="card.diagnosis.shortAction" class="line-clamp line-clamp-loose action-text">
-            {{ t('card.shortActionPrefix') }}{{ card.diagnosis.shortAction }}
-          </p>
+          <template v-else-if="card.diagnosis.bandAction">
+            <p class="line-clamp line-clamp-loose action-text">
+              {{ t('card.bandActionPrefix') }}{{ card.diagnosis.bandAction }}
+            </p>
+            <p v-if="card.diagnosis.shortAction" class="line-clamp line-clamp-loose action-text">
+              {{ t('card.shortActionPrefix') }}{{ card.diagnosis.shortAction }}
+            </p>
+          </template>
         </template>
         <template v-else>
           <p class="muted">{{ t('card.waitDiagnosis') }}</p>

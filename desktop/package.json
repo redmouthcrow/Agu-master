@@ -1,6 +1,6 @@
 {
   "name": "agu-desktop",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "private": true,
   "author": "AguMaster",
   "description": "AguMaster Win11 desktop shell (Electron)",

@@ -8,6 +8,29 @@
 
 ---
 
+## 2.6.0 - 2026-06-17
+
+### 变更类型：修改 / 破坏性变更（次版本）
+
+### 修改功能
+- **推翻 v2.5 无持仓逻辑**（ADR-008 局部作废）：
+  - v2.5 设计 `bandAction` 全员可见，但**观望用户（无持仓）需要的是"该不该建仓/在什么价位建仓"，而非"现有持仓怎么操作"**。给观望用户看波段建议答非所问。
+- **功能 4（大模型诊断）输出路径重定义为互斥两路**：
+  - **有持仓**：`signal` + `analysis` + `risk` + `shortAction` + `bandAction` + key levels（v2.5 路径保留）
+  - **无持仓（观望）**：`signal` + `analysis` + `risk` + `buildPositionAdvice`（建仓建议）+ key levels（**替代** v2.5 的 bandAction）
+  - `buildPositionAdvice`（≤30 字）必须锚定 `supportLevel` / `resistanceLevel`，给出建仓方向与建议价位
+
+### 破坏性变更
+- `DiagnosisResult.bandAction` 从必填 `string` 改为可选 `string?`（仅持仓时输出）
+- 新增 `DiagnosisResult.buildPositionAdvice?: string`（仅无持仓时输出）
+- 旧 v2.5 缓存中"无持仓但有 bandAction"的条目全部失效，下次刷新重新诊断
+- `llmDiagnosis.ts` 基础 Prompt 输出从 `bandAction` 改为 `buildPositionAdvice`
+
+### 架构决策
+- **ADR-008 增设 v2.6 推翻记录**：作废第 3、5 条（bandAction 全员可见 + UI 展示规则），保留第 1、2、4 条
+
+---
+
 ## 2.5.0 - 2026-06-17
 
 ### 变更类型：新增 / 修改（次版本）

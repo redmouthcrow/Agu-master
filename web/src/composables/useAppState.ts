@@ -82,25 +82,42 @@ let authAlertSentThisRound = false;
 let diagnosisCacheMemory: Record<string, DiagnosisCacheEntry> | null = null;
 
 /**
- * v2.5 migration: old cache entries may carry `action` (pre-rename) and lack
- * `bandAction`. Per spec ADR-008 / changelog compatibility note:
- *  - `action` → renamed to `shortAction` (if `shortAction` absent)
- *  - entries missing `bandAction` cannot be synthesized → dropped, forcing a
- *    fresh diagnosis on next refresh (bandAction is required + anchor-checked)
- * Returns the migrated DiagnosisResult, or null if the entry is stale.
+ * v2.5→v2.6 migration: cache field evolution across two versions.
+ *
+ * v2.5 entries (post ADR-008):
+ *  - with-position: shortAction + bandAction (both required)
+ *  - without-position: bandAction only (required, no shortAction)
+ *
+ * v2.6 entries (post ADR-008 reversal):
+ *  - with-position: shortAction + bandAction (unchanged)
+ *  - without-position: buildPositionAdvice (replaces bandAction)
+ *
+ * Migration rules:
+ *  1. Pre-v2.5: action → shortAction rename (if shortAction absent)
+ *  2. v2.5 without-position (bandAction alone, no shortAction) → invalidated;
+ *     v2.6 requires buildPositionAdvice for observation-mode entries.
+ *  3. v2.5 with-position (bandAction + shortAction) → valid, kept as-is.
+ *  4. v2.6 entries already carrying buildPositionAdvice → valid.
+ * Returns the migrated DiagnosisResult, or null if the entry must be discarded.
  */
 function migrateDiagnosis(d: DiagnosisResult): DiagnosisResult | null {
   let next = d;
-  // Pre-v2.5 entries: rename action → shortAction.
+  // Rule 1: Pre-v2.5 entries carrying action → shortAction.
   if ((next as { action?: string }).action != null && next.shortAction == null) {
     const { action, ...rest } = next as DiagnosisResult & { action?: string };
     next = { ...rest, shortAction: action };
   }
-  // bandAction is required (v2.5); stale entries without it must be discarded.
-  if (!next.bandAction) {
-    return null;
+  // Rule 4: v2.6 observation-mode (buildPositionAdvice) — already valid.
+  if (next.buildPositionAdvice) {
+    return next;
   }
-  return next;
+  // Rule 3: v2.5/v2.6 with-position (shortAction + bandAction both present).
+  if (next.shortAction && next.bandAction) {
+    return next;
+  }
+  // Rule 2: v2.5 without-position (bandAction alone) — stale, discard.
+  // Fallthrough: anything else is incomplete → discard.
+  return null;
 }
 
 function readDiagnosisCacheFromObject(

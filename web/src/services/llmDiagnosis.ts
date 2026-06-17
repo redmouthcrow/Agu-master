@@ -28,7 +28,7 @@ const SYSTEM_PROMPT_BASE = `# Role
 2. 形态诊断 (analysis)：限 50 字以内。必须包含【一个显性量价特征】（如：30m放量滞涨）+【一个短期趋势推导】（如：向日内低点回踩测试支撑）。
 3. 风险预测 (risk)：限 50 字以内。必须指出明确的【右侧破位条件】或【动能衰竭信号】（如：一旦跌破今日低点XX元将引发多头踩踏，或：MACD 30m级别顶背离隐患）。
 4. 关键位 (supportLevel / resistanceLevel)：根据当前快照的 price、high、low、prevClose 及量价特征，推算最贴近当前价格的【近端技术支撑位】和【近端技术压力位】。单位为元，保留 3 位小数。支撑位应低于当前价，压力位应高于当前价。
-5. 波段建议 (bandAction)：限 30 字以内。必须锚定上述 supportLevel / resistanceLevel 与当前价 price 的相对位置，给出数日级别的波段建议（如「接近阻力位，突破前不追高」「回落至支撑附近可分批关注」）。严禁脱离关键位凭空给出趋势观点。
+5. 建仓建议 (buildPositionAdvice)：限 30 字以内。必须锚定上述 supportLevel / resistanceLevel 与当前价 price 的相对位置，给出建仓方向与建议价位（如「可等待放量企稳支撑位后轻仓试多」「接近阻力位暂不建议追高建仓」）。严禁脱离关键位凭�空给出买卖建议。
 
 # Output Format
 必须严格按照以下 JSON 格式响应，不要包含任何 markdown 标记（如 \`\`\`json）或多余的解释文字：
@@ -36,7 +36,7 @@ const SYSTEM_PROMPT_BASE = `# Role
   "signal": "4字标准标签",
   "analysis": "高密度量价技术面诊断（不超过50字）",
   "risk": "明确的破位或衰竭风险预测（不超过50字）",
-  "bandAction": "锚定关键位的波段建议（不超过30字）",
+  "buildPositionAdvice": "锚定关键位的建仓建议（不超过30字）",
   "supportLevel": 6.12,
   "resistanceLevel": 6.85
 }`;
@@ -149,17 +149,28 @@ export async function runDiagnosis(
     if (!isValidSignal(parsed.signal)) {
       return { ok: false, raw };
     }
-    // bandAction: always required (v2.5), ≤30 chars, must anchor to a key level.
-    if (
-      !parsed.bandAction ||
-      parsed.bandAction.length > 30 ||
-      !anchorsToKeyLevel(parsed.bandAction, parsed.supportLevel, parsed.resistanceLevel)
-    ) {
-      return { ok: false, raw };
-    }
-    // shortAction: required only when position configured (v2.5, renamed from action).
-    if (withPosition && (!parsed.shortAction || parsed.shortAction.length > 30)) {
-      return { ok: false, raw };
+    // v2.6: two exclusive output paths based on position configuration.
+    if (withPosition) {
+      // With position: shortAction + bandAction both required, both anchor-checked.
+      if (!parsed.shortAction || parsed.shortAction.length > 30) {
+        return { ok: false, raw };
+      }
+      if (
+        !parsed.bandAction ||
+        parsed.bandAction.length > 30 ||
+        !anchorsToKeyLevel(parsed.bandAction, parsed.supportLevel, parsed.resistanceLevel)
+      ) {
+        return { ok: false, raw };
+      }
+    } else {
+      // Without position (observation mode): buildPositionAdvice required, anchor-checked.
+      if (
+        !parsed.buildPositionAdvice ||
+        parsed.buildPositionAdvice.length > 30 ||
+        !anchorsToKeyLevel(parsed.buildPositionAdvice, parsed.supportLevel, parsed.resistanceLevel)
+      ) {
+        return { ok: false, raw };
+      }
     }
     if (
       parsed.supportLevel == null ||
@@ -176,9 +187,9 @@ export async function runDiagnosis(
 }
 
 /**
- * v2.5 anchor check: bandAction must reference supportLevel or resistanceLevel
+ * v2.6 anchor check: advice field must reference supportLevel or resistanceLevel
  * (the numeric value, allowing rounding drift) so the AI cannot hand back a
- * free-floating trend opinion. Matches the value as a string substring.
+ * free-floating opinion. Matches the value as a string substring.
  */
 function anchorsToKeyLevel(
   bandAction: string,

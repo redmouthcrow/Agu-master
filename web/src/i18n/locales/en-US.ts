@@ -28,6 +28,7 @@ export const enUS: Record<MessageKey, string> = {
   'card.actionPrefix': 'Action: ',
   'card.bandActionPrefix': 'Swing: ',
   'card.shortActionPrefix': 'Short: ',
+  'card.buildPositionAdvicePrefix': 'Entry: ',
   'card.positionQty': 'Qty',
   'card.positionCost': 'Cost',
   'card.positionPnl': 'P&L',
