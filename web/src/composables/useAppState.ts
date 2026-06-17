@@ -81,19 +81,47 @@ let authAlertSentThisRound = false;
 
 let diagnosisCacheMemory: Record<string, DiagnosisCacheEntry> | null = null;
 
+/**
+ * v2.5 migration: old cache entries may carry `action` (pre-rename) and lack
+ * `bandAction`. Per spec ADR-008 / changelog compatibility note:
+ *  - `action` → renamed to `shortAction` (if `shortAction` absent)
+ *  - entries missing `bandAction` cannot be synthesized → dropped, forcing a
+ *    fresh diagnosis on next refresh (bandAction is required + anchor-checked)
+ * Returns the migrated DiagnosisResult, or null if the entry is stale.
+ */
+function migrateDiagnosis(d: DiagnosisResult): DiagnosisResult | null {
+  let next = d;
+  // Pre-v2.5 entries: rename action → shortAction.
+  if ((next as { action?: string }).action != null && next.shortAction == null) {
+    const { action, ...rest } = next as DiagnosisResult & { action?: string };
+    next = { ...rest, shortAction: action };
+  }
+  // bandAction is required (v2.5); stale entries without it must be discarded.
+  if (!next.bandAction) {
+    return null;
+  }
+  return next;
+}
+
 function readDiagnosisCacheFromObject(
   raw: Record<string, DiagnosisCacheEntry | DiagnosisResult>,
 ): Record<string, DiagnosisCacheEntry> {
   const out: Record<string, DiagnosisCacheEntry> = {};
   for (const [code, entry] of Object.entries(raw)) {
     if ('fingerprint' in entry && entry.diagnosis) {
-      out[code] = entry;
+      const migrated = migrateDiagnosis(entry.diagnosis);
+      if (migrated) {
+        out[code] = { ...entry, diagnosis: migrated };
+      }
     } else if ('signal' in entry) {
-      out[code] = {
-        diagnosis: entry as DiagnosisResult,
-        fingerprint: '',
-        updatedAt: '',
-      };
+      const migrated = migrateDiagnosis(entry as DiagnosisResult);
+      if (migrated) {
+        out[code] = {
+          diagnosis: migrated,
+          fingerprint: '',
+          updatedAt: '',
+        };
+      }
     }
   }
   return out;

@@ -108,7 +108,10 @@ export interface DiagnosisResult {
   signal: string;
   analysis: string;
   risk: string;
-  action?: string;
+  /** 波段操作建议（v2.5，必填，须锚定 supportLevel/resistanceLevel 与当前价相对位置）。 */
+  bandAction: string;
+  /** 短期持仓操作建议（v2.5，原 action；仅当配置持仓时由 LLM 输出）。 */
+  shortAction?: string;
   supportLevel?: number;
   resistanceLevel?: number;
 }

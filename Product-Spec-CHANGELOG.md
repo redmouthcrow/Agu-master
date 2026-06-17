@@ -8,6 +8,38 @@
 
 ---
 
+## 2.5.0 - 2026-06-17
+
+### 变更类型：新增 / 修改（次版本）
+
+### 新增功能
+- **波段操作建议（bandAction）**：
+  - `DiagnosisResult` 新增 `bandAction` 字段（≤30 字，数日级别波段建议）
+  - **无论是否配置持仓均必填**（与 shortAction 的持仓依赖区分）
+  - **强制锚定 `supportLevel` / `resistanceLevel` 与当前价相对位置**，Prompt 强约束 + 解析层校验双重保障
+  - 禁止 AI 脱离关键位凭空给趋势观点；锚定校验失败视为解析失败，走 Raw 分支
+  - 解决空仓用户看不到任何操作建议的功能失效问题
+
+### 修改功能
+- **功能 4（大模型诊断）**：
+  - 原 `action` 字段**重命名为 `shortAction`**（短期持仓动作，语义不变，仍仅持仓时必填）
+  - 输出契约改为 `{ signal, analysis, risk, bandAction [, shortAction], supportLevel, resistanceLevel }`
+  - Prompt 明确要求 bandAction 引用关键位与当前价相对关系
+  - 异常处理新增：bandAction 缺失或未锚定关键位 → 解析失败
+- **功能 5（诊断看板 UI）/ 功能 6（悬浮窗）**：
+  - 卡片操作建议拆为两行：波段建议行（所有用户可见）+ 短期建议行（仅持仓用户可见，未配置不渲染不留空占位）
+  - 展示顺序：Risk 行下方 → 波段建议 → 短期建议（持仓时）
+  - 悬浮窗复用 StockCard 同步两行展示
+
+### 架构决策
+- **ADR-008（短期建议与波段建议拆分）**：记录"不做长期建议、改波段建议"的决策依据（产品是 5 分钟短线工具，无周线/月线数据，长期建议缺乏依据）；shortAction/bandAction 持仓依赖差异化；signal 与 shortAction 一定性一量化不重复；卡片密度控制（未持仓不渲染短期行）
+
+### 兼容性
+- **破坏性变更**：`DiagnosisResult.action` → `shortAction`，下游（llmDiagnosis.ts 解析、StockCard.vue 展示、diagnosis-cache 持久化）需同步重命名
+- 旧缓存（`agu_diagnosis_cache`）中的 `action` 字段在读取时需兼容映射为 `shortAction`，或一次性失效重建
+
+---
+
 ## 2.4.0 - 2026-06-16
 
 ### 变更类型：新增 / 重构（次版本）

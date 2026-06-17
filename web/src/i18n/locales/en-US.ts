@@ -26,6 +26,8 @@ export const enUS: Record<MessageKey, string> = {
   'card.tagRisk': '[Risk]',
   'card.tagRaw': '[Raw]',
   'card.actionPrefix': 'Action: ',
+  'card.bandActionPrefix': 'Swing: ',
+  'card.shortActionPrefix': 'Short: ',
   'card.positionQty': 'Qty',
   'card.positionCost': 'Cost',
   'card.positionPnl': 'P&L',
