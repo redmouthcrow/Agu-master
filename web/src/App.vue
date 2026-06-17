@@ -54,6 +54,16 @@ const ungroupedCount = computed(
   ).length,
 );
 
+const groupCounts = computed(() => {
+  const map: Record<string, number> = {};
+  for (const w of config.value.watchlist) {
+    if (w.groupId) {
+      map[w.groupId] = (map[w.groupId] ?? 0) + 1;
+    }
+  }
+  return map;
+});
+
 const groupedCards = computed(() => {
   const result: { group: { id: string; name: string; collapsed: boolean } | null; cards: typeof cards.value }[] = [];
   const sortedGroups = [...groups.value].sort((a, b) => a.order - b.order);
@@ -89,6 +99,7 @@ onMounted(() => {
       :groups="groups"
       :watchlist-count="watchlistCount"
       :ungrouped-count="ungroupedCount"
+      :group-counts="groupCounts"
       :collapsed="sidebarCollapsed"
       @toggle-collapse="sidebarCollapsed = !sidebarCollapsed"
       @add-group="addGroup"

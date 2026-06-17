@@ -7,6 +7,7 @@ const props = defineProps<{
   groups: UserGroup[];
   watchlistCount: number;
   ungroupedCount: number;
+  groupCounts: Record<string, number>;
   collapsed: boolean;
 }>();
 
@@ -51,6 +52,11 @@ function confirmRename() {
   if (trimmed && editingId.value) {
     emit('renameGroup', editingId.value, trimmed);
   }
+  editingId.value = null;
+  editName.value = '';
+}
+
+function cancelRename() {
   editingId.value = null;
   editName.value = '';
 }
@@ -115,11 +121,19 @@ function confirmRename() {
                 maxlength="10"
                 class="group-edit-input"
                 @keyup.enter="confirmRename"
-                @keyup.escape="editingId = null"
+                @keyup.escape="cancelRename"
               />
+              <button class="btn-link btn-link-sm" @click="confirmRename">
+                {{ t('common.save') }}
+              </button>
+              <button class="btn-link btn-link-sm" @click="cancelRename">
+                {{ t('common.cancel') }}
+              </button>
             </template>
             <template v-else>
-              <span class="group-name">{{ group.name }}</span>
+              <span class="group-name">{{ group.name }}
+                <span class="group-count">({{ props.groupCounts[group.id] ?? 0 }})</span>
+              </span>
               <button
                 class="btn-menu"
                 @click="startRename(group)"
@@ -151,6 +165,9 @@ function confirmRename() {
   flex-direction: column;
   transition: width 0.15s, min-width 0.15s;
   overflow: hidden;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
 }
 
 .sidebar-collapsed {
@@ -217,6 +234,7 @@ function confirmRename() {
 
 .group-edit-input {
   flex: 1;
+  min-width: 0;
   min-height: 28px;
   padding: 3px 8px;
   border-radius: 4px;
@@ -233,14 +251,24 @@ function confirmRename() {
 .group-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   padding: 4px 0;
   font-size: 13px;
+  flex-wrap: wrap;
+  row-gap: 2px;
 }
 
 .group-name {
   flex: 1;
   color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group-count {
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .btn-menu {
@@ -249,7 +277,8 @@ function confirmRename() {
   color: var(--text-dim);
   cursor: pointer;
   font-size: 11px;
-  padding: 0 4px;
+  padding: 2px 4px;
+  white-space: nowrap;
 }
 
 .btn-menu:hover {

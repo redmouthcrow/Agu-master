@@ -1285,6 +1285,11 @@ export function useAppState() {
       return;
     }
     item.groupId = groupId;
+    // Sync cards so groupedCards computed picks up the change.
+    const card = cards.value.find((c) => c.stock.code === code);
+    if (card) {
+      card.stock.groupId = groupId;
+    }
     persistConfig();
     broadcastLiveSync();
   }
