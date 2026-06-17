@@ -96,8 +96,8 @@ export const enUS: Record<MessageKey, string> = {
   'config.alertQuoteError': 'Quote fetch error',
 
   'sidebar.newGroup': '+ New group',
-  'sidebar.renameGroup': 'Rename group',
-  'sidebar.deleteGroup': 'Delete group',
+  'sidebar.renameGroup': 'Rename',
+  'sidebar.deleteGroup': 'Delete',
   'sidebar.ungrouped': 'Ungrouped',
   'sidebar.collapse': 'Collapse sidebar',
   'sidebar.groupEmpty': 'No securities in this group',

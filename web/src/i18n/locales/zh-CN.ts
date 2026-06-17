@@ -93,8 +93,8 @@ export const zhCN = {
   'config.alertQuoteError': '行情获取异常',
 
   'sidebar.newGroup': '+ 新建分组',
-  'sidebar.renameGroup': '重命名分组',
-  'sidebar.deleteGroup': '删除分组',
+  'sidebar.renameGroup': '重命名',
+  'sidebar.deleteGroup': '删除',
   'sidebar.ungrouped': '未分组',
   'sidebar.collapse': '收起侧边栏',
   'sidebar.groupEmpty': '此分组暂无证券',
