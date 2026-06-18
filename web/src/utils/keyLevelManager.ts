@@ -5,11 +5,6 @@ import {
   MAX_KEY_LEVELS,
 } from '../types';
 
-export interface KeyLevelUpdateResult {
-  updated: boolean;
-  pending?: { support: { old: number; new: number } | null; resistance: { old: number; new: number } | null };
-}
-
 function roundKeyPrice(price: number): number {
   return Math.round(price * 1000) / 1000;
 }
@@ -30,24 +25,20 @@ export function applyKeyLevelsFromDiagnosis(
   supportLevel: number | undefined,
   resistanceLevel: number | undefined,
   now: string,
-): KeyLevelUpdateResult {
+): void {
   if (item.keyLevelsLocked) {
-    return { updated: false };
+    return;
   }
   if (supportLevel == null && resistanceLevel == null) {
-    return { updated: false };
+    return;
   }
 
   const levels = item.keyLevels ? [...item.keyLevels] : [];
-  let pendingSupport: { old: number; new: number } | null = null;
-  let pendingResistance: { old: number; new: number } | null = null;
   let updated = false;
 
   if (supportLevel != null) {
     const old = findAiLevel(levels, 'support');
-    if (old && deviationExceeds(old.price, supportLevel)) {
-      pendingSupport = { old: old.price, new: supportLevel };
-    } else {
+    if (!old || !deviationExceeds(old.price, supportLevel)) {
       const rounded = roundKeyPrice(supportLevel);
       if (old) {
         old.price = rounded;
@@ -61,9 +52,7 @@ export function applyKeyLevelsFromDiagnosis(
 
   if (resistanceLevel != null) {
     const old = findAiLevel(levels, 'resistance');
-    if (old && deviationExceeds(old.price, resistanceLevel)) {
-      pendingResistance = { old: old.price, new: resistanceLevel };
-    } else {
+    if (!old || !deviationExceeds(old.price, resistanceLevel)) {
       const rounded = roundKeyPrice(resistanceLevel);
       if (old) {
         old.price = rounded;
@@ -78,39 +67,6 @@ export function applyKeyLevelsFromDiagnosis(
   if (updated) {
     item.keyLevels = levels;
   }
-
-  if (pendingSupport || pendingResistance) {
-    return { updated, pending: { support: pendingSupport, resistance: pendingResistance } };
-  }
-
-  return { updated };
-}
-
-export function acceptPendingKeyLevels(
-  item: WatchlistItem,
-  supportLevel: number,
-  resistanceLevel: number,
-  now: string,
-): void {
-  const levels = item.keyLevels ? [...item.keyLevels] : [];
-  const roundedSupport = roundKeyPrice(supportLevel);
-  const roundedResistance = roundKeyPrice(resistanceLevel);
-
-  const supIdx = levels.findIndex((l) => l.type === 'support' && l.source === 'ai');
-  if (supIdx >= 0) {
-    levels[supIdx] = { ...levels[supIdx], price: roundedSupport, updatedAt: now };
-  } else {
-    levels.push({ price: roundedSupport, label: '支撑位', type: 'support', source: 'ai', updatedAt: now });
-  }
-
-  const resIdx = levels.findIndex((l) => l.type === 'resistance' && l.source === 'ai');
-  if (resIdx >= 0) {
-    levels[resIdx] = { ...levels[resIdx], price: roundedResistance, updatedAt: now };
-  } else {
-    levels.push({ price: roundedResistance, label: '压力位', type: 'resistance', source: 'ai', updatedAt: now });
-  }
-
-  item.keyLevels = levels;
 }
 
 export function toggleKeyLevelsLock(item: WatchlistItem): boolean {

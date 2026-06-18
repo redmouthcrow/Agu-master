@@ -2,10 +2,6 @@ import type { QuoteSnapshot } from '../types';
 import { inferInstrumentType } from '../utils/stockCode';
 import { formatTimeHms, getBeijingTime } from '../utils/time';
 
-export interface QuoteProvider {
-  fetchQuotes(codes: string[]): Promise<Map<string, QuoteSnapshot>>;
-}
-
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');

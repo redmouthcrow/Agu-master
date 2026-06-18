@@ -84,39 +84,20 @@ let diagnosisCacheMemory: Record<string, DiagnosisCacheEntry> | null = null;
 /**
  * v2.5→v2.6 migration: cache field evolution across two versions.
  *
- * v2.5 entries (post ADR-008):
- *  - with-position: shortAction + bandAction (both required)
- *  - without-position: bandAction only (required, no shortAction)
- *
- * v2.6 entries (post ADR-008 reversal):
- *  - with-position: shortAction + bandAction (unchanged)
- *  - without-position: buildPositionAdvice (replaces bandAction)
- *
  * Migration rules:
- *  1. Pre-v2.5: action → shortAction rename (if shortAction absent)
- *  2. v2.5 without-position (bandAction alone, no shortAction) → invalidated;
- *     v2.6 requires buildPositionAdvice for observation-mode entries.
- *  3. v2.5 with-position (bandAction + shortAction) → valid, kept as-is.
- *  4. v2.6 entries already carrying buildPositionAdvice → valid.
+ *  1. v2.6 entries carrying buildPositionAdvice → valid.
+ *  2. v2.5/v2.6 with-position (shortAction + bandAction both present) → valid.
+ *  3. v2.5 without-position (bandAction alone) → stale, discard.
+ *  4. Anything else is incomplete → discard.
  * Returns the migrated DiagnosisResult, or null if the entry must be discarded.
  */
 function migrateDiagnosis(d: DiagnosisResult): DiagnosisResult | null {
-  let next = d;
-  // Rule 1: Pre-v2.5 entries carrying action → shortAction.
-  if ((next as { action?: string }).action != null && next.shortAction == null) {
-    const { action, ...rest } = next as DiagnosisResult & { action?: string };
-    next = { ...rest, shortAction: action };
+  if (d.buildPositionAdvice) {
+    return d;
   }
-  // Rule 4: v2.6 observation-mode (buildPositionAdvice) — already valid.
-  if (next.buildPositionAdvice) {
-    return next;
+  if (d.shortAction && d.bandAction) {
+    return d;
   }
-  // Rule 3: v2.5/v2.6 with-position (shortAction + bandAction both present).
-  if (next.shortAction && next.bandAction) {
-    return next;
-  }
-  // Rule 2: v2.5 without-position (bandAction alone) — stale, discard.
-  // Fallthrough: anything else is incomplete → discard.
   return null;
 }
 
@@ -125,19 +106,11 @@ function readDiagnosisCacheFromObject(
 ): Record<string, DiagnosisCacheEntry> {
   const out: Record<string, DiagnosisCacheEntry> = {};
   for (const [code, entry] of Object.entries(raw)) {
+    // All current caches use the DiagnosisCacheEntry wrapper format.
     if ('fingerprint' in entry && entry.diagnosis) {
       const migrated = migrateDiagnosis(entry.diagnosis);
       if (migrated) {
         out[code] = { ...entry, diagnosis: migrated };
-      }
-    } else if ('signal' in entry) {
-      const migrated = migrateDiagnosis(entry as DiagnosisResult);
-      if (migrated) {
-        out[code] = {
-          diagnosis: migrated,
-          fingerprint: '',
-          updatedAt: '',
-        };
       }
     }
   }

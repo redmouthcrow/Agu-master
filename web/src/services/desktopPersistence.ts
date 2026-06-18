@@ -1,12 +1,12 @@
 import type { AppConfig, DiagnosisCacheEntry, LiveSyncPayload } from '../types';
 import { isDesktopRuntime } from '../utils/appMode';
-import { collectLegacyStorageForMigration, getItem, removeItem, setItem } from '../utils/storage';
+import { collectLegacyStorageForMigration, getItem, setItem } from '../utils/storage';
 
 const CONFIG_KEY = 'config';
 const DIAG_KEY = 'diagnosis_cache';
 const LIVE_SYNC_KEY = 'live_sync';
 
-export interface DesktopUserDataSnapshot {
+interface DesktopUserDataSnapshot {
   config: AppConfig | null;
   diagnosisCache: Record<string, DiagnosisCacheEntry> | null;
   liveSync: LiveSyncPayload | null;
@@ -63,14 +63,6 @@ export async function desktopStorageSet(key: string, value: unknown): Promise<bo
     return setItem(key, value);
   }
   return window.aguDesktop.storageSet(key, value);
-}
-
-export async function desktopStorageRemove(key: string): Promise<void> {
-  if (!isDesktopRuntime() || !window.aguDesktop?.storageRemove) {
-    removeItem(key);
-    return;
-  }
-  window.aguDesktop.storageRemove(key);
 }
 
 export async function desktopCleanupCalendars(keepYears: number[]): Promise<void> {

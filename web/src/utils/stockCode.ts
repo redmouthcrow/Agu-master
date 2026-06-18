@@ -58,12 +58,3 @@ export function normalizeWatchlistSymbol(input: string): ParsedSymbol | null {
 
   return { code, market, instrumentType };
 }
-
-/** @deprecated */
-export function normalizeStockCode(input: string) {
-  const parsed = normalizeWatchlistSymbol(input);
-  if (!parsed) {
-    return null;
-  }
-  return { code: parsed.code, market: parsed.market };
-}

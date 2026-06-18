@@ -19,10 +19,6 @@ export function resolveLocale(): Locale {
 
 const localeRef = ref<Locale>(resolveLocale());
 
-export function getLocale(): Locale {
-  return localeRef.value;
-}
-
 export function t(
   key: MessageKey,
   params?: Record<string, string | number>,

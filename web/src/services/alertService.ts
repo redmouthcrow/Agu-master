@@ -94,15 +94,3 @@ export function collectAlertsFromRound(
 export function createAuthErrorAlert(): AlertPayload {
   return { type: 'auth', code: '', name: '' };
 }
-
-export function resetBreakthroughDebounce(code?: string): void {
-  if (code) {
-    for (const key of lastBreakthroughTs.keys()) {
-      if (key.startsWith(`${code}:`)) {
-        lastBreakthroughTs.delete(key);
-      }
-    }
-  } else {
-    lastBreakthroughTs.clear();
-  }
-}

@@ -11,5 +11,3 @@ export function isNewerLiveSync(
 ): boolean {
   return incoming.ts > lastAppliedTs;
 }
-
-export const LIVE_SYNC_STORAGE_KEY = 'live_sync';
