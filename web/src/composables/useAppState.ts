@@ -1318,6 +1318,11 @@ export function useAppState() {
         return;
       }
       toggleKlLock(item);
+      // Sync card so StockCard reacts to the lock toggle.
+      const card = cards.value.find((c) => c.stock.code === code);
+      if (card) {
+        card.stock.keyLevelsLocked = item.keyLevelsLocked;
+      }
       persistConfig();
       broadcastLiveSync();
     },
@@ -1328,6 +1333,11 @@ export function useAppState() {
       }
       const ok = addKl(item, price, label);
       if (ok) {
+        // Sync card so the UI picks up the new key level.
+        const card = cards.value.find((c) => c.stock.code === code);
+        if (card) {
+          card.stock.keyLevels = item.keyLevels;
+        }
         persistConfig();
         broadcastLiveSync();
       }
@@ -1340,6 +1350,11 @@ export function useAppState() {
       }
       const ok = removeKl(item, index);
       if (ok) {
+        // Sync card so the UI picks up the removal.
+        const card = cards.value.find((c) => c.stock.code === code);
+        if (card) {
+          card.stock.keyLevels = item.keyLevels;
+        }
         persistConfig();
         broadcastLiveSync();
       }
