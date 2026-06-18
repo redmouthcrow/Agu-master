@@ -8,6 +8,20 @@
 
 ---
 
+## 2.6.1 - 2026-06-18
+
+### 变更类型：修复（修订版本）
+
+### 修复
+- **关键位操作无响应**：
+  - 删除自定义标签（×）无反应
+  - 新增标签不显示
+  - 锁定按钮点击锁图标不切换
+  - 根因：`config.watchlist` 与 `cards` 分属不同 Vue Proxy，stock 引用共享但 mutation 跨 Proxy 不触发 UI
+  - 修复：`addCustomKeyLevel` / `removeCustomKeyLevel` / `toggleKeyLevelsLock` 操作后显式同步 `card.stock.keyLevels` / `card.stock.keyLevelsLocked`
+
+---
+
 ## 2.6.0 - 2026-06-17
 
 ### 变更类型：修改 / 破坏性变更（次版本）
