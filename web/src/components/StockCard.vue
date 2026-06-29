@@ -301,6 +301,15 @@ const customKeyLevelCount = computed(
           {{ t('common.edit') }}
         </button>
       </div>
+      <div v-else-if="!widgetMode" class="position-line">
+        <button
+          type="button"
+          class="btn-link btn-link-sm"
+          @click="startEditPosition"
+        >
+          {{ t('card.addPosition') }}
+        </button>
+      </div>
 
       <div v-if="editingPosition && !widgetMode" class="position-edit">
         <input v-model="editQty" type="number" min="1" step="1" placeholder="Qty" />

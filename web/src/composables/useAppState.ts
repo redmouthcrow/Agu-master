@@ -33,7 +33,7 @@ import {
 import { createAlignScheduler } from '../services/scheduler';
 import { loadLocalUserConfig } from '../services/userConfig';
 import { normalizeRefreshFrequency } from '../utils/alignGrid';
-import { validatePositionPair, roundCostPrice } from '../utils/position';
+import { hasPosition, validatePositionPair, roundCostPrice } from '../utils/position';
 import { getAppMode, isDesktopRuntime } from '../utils/appMode';
 import {
   clampWidgetOpacity,
@@ -1180,6 +1180,10 @@ export function useAppState() {
     if (next === 'overclock') {
       if (!item.keyLevels || item.keyLevels.length === 0) {
         showToast(t('toast.overclockNeedKeyLevels'));
+        return;
+      }
+      if (!hasPosition(item)) {
+        showToast(t('toast.overclockNeedPosition'));
         return;
       }
       if (getOverclockCount() >= MAX_OVERCLOCK && current !== 'overclock') {
