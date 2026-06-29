@@ -1170,26 +1170,21 @@ export function useAppState() {
     if (!item) {
       return;
     }
-    const modes: RefreshMode[] = ['off', 'normal', 'overclock'];
+    // Overclock is only available when position + key levels are configured.
+    const eligible =
+      hasPosition(item) && item.keyLevels && item.keyLevels.length > 0;
+    const modes: RefreshMode[] = eligible
+      ? ['off', 'normal', 'overclock']
+      : ['off', 'normal'];
     const current = item.refreshMode || 'normal';
     let nextIdx = modes.indexOf(current) + 1;
     if (nextIdx >= modes.length) {
       nextIdx = 0;
     }
     const next = modes[nextIdx];
-    if (next === 'overclock') {
-      if (!item.keyLevels || item.keyLevels.length === 0) {
-        showToast(t('toast.overclockNeedKeyLevels'));
-        return;
-      }
-      if (!hasPosition(item)) {
-        showToast(t('toast.overclockNeedPosition'));
-        return;
-      }
-      if (getOverclockCount() >= MAX_OVERCLOCK && current !== 'overclock') {
-        showToast(t('toast.overclockLimit', { max: MAX_OVERCLOCK }));
-        return;
-      }
+    if (next === 'overclock' && getOverclockCount() >= MAX_OVERCLOCK && current !== 'overclock') {
+      showToast(t('toast.overclockLimit', { max: MAX_OVERCLOCK }));
+      return;
     }
     item.refreshMode = next;
     persistConfig();
