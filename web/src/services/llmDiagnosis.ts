@@ -8,6 +8,7 @@ import type {
 } from '../types';
 import { calcPnlPct, hasPosition, roundCostPrice } from '../utils/position';
 import { formatVolumeForPrompt } from './quoteJsonp';
+import { formatHistoryText } from '../utils/priceHistory';
 
 const SYSTEM_PROMPT_BASE = `# Role
 你是一个在顶级量化私募机构深耕多年的资深 A 股日内短线（15m/30m级别）策略专家兼技术面投研助理。你的任务是根据传入的实时及历史 K 线截面数据，进行高密度的量价行为（VSA）诊断，并输出明确的操盘动作倾向与核心风险预警。
@@ -37,10 +38,11 @@ const SYSTEM_PROMPT_BASE = `# Role
 - 保守（conservative）：以保本和风控为最高优先级，减仓阈值为 pnlPct > 3%。即使技术面偏多，也应以防御性建议为主。
 
 # Forward-Looking Analysis (前瞻分析)
-你必须基于日内数据做出前瞻性判断，而非仅描述当前状态：
+你必须基于日内数据与近7日走势做出前瞻性判断：
 - 根据日内振幅（high-low）、当前价在日内区间的位置（positionInRange）、较昨收涨跌方向、量能水平，推断当日最可能的走势方向（偏多上行 / 偏空下行 / 窄幅震荡）
-- analysis 中体现推断方向，risk 中指出判断错误时的关键破位条件
-- bandAction / buildPositionAdvice 中给出基于关键位的波段趋势预判
+- 结合近7日收盘价走势（见 User Message），判断短期趋势（上行/下行/横盘），并在 analysis 中体现
+- bandAction / buildPositionAdvice 中给出基于关键位与近期趋势的未来 3-5 个交易日波段预判
+- risk 中指出判断错误的关键破位条件
 
 # Output Format
 必须严格按照以下 JSON 格式响应，不要包含任何 markdown 标记（如 \`\`\`json）或多余的解释文字：
@@ -115,6 +117,12 @@ function buildUserMessage(
 快照: price=${snapshot.price}, changePct=${change}%, high=${high}, low=${low}, volume=${volume}, prevClose=${prevClose}
 日内: 振幅=${amplitude}, 位置=${positionInRange}%(0=最低,100=最高), 方向=${direction}
 风格: ${STYLE_LABELS[investmentStyle] ?? '中立'}`;
+
+  // v2.7.1: 7-day price history for trend analysis.
+  const histText = formatHistoryText(snapshot.code);
+  if (histText) {
+    msg += `\n近7日收盘: ${histText}`;
+  }
 
   if (hasPosition(watchlistItem)) {
     const pnl = calcPnlPct(snapshot.price, watchlistItem.costPrice!);

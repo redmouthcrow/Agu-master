@@ -34,6 +34,7 @@ import { createAlignScheduler } from '../services/scheduler';
 import { loadLocalUserConfig } from '../services/userConfig';
 import { normalizeRefreshFrequency } from '../utils/alignGrid';
 import { hasPosition, validatePositionPair, roundCostPrice } from '../utils/position';
+import { recordPrice } from '../utils/priceHistory';
 import { getAppMode, isDesktopRuntime } from '../utils/appMode';
 import {
   clampWidgetOpacity,
@@ -388,6 +389,10 @@ async function refreshCardQuoteAndDiagnosis(
     ...snap,
     instrumentType: card.stock.instrumentType,
   };
+  // Record today's close price for 7-day trend history.
+  if (snap.price != null) {
+    recordPrice(card.stock.code, snap.price);
+  }
   if (card.stock.name !== snap.name) {
     card.stock.name = snap.name;
     persistConfig();
