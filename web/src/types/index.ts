@@ -51,6 +51,19 @@ export interface UserGroup {
   collapsed: boolean;
 }
 
+export interface Portfolio {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+/** Maps a security to a portfolio with a weight percentage (0-100). */
+export interface PortfolioAssignment {
+  code: string;
+  portfolioId: string;
+  weight: number;
+}
+
 export const DEFAULT_GROUP_ID = '__default__';
 
 export interface WidgetWindowBounds {
@@ -82,6 +95,9 @@ export interface AppConfig {
   investmentStyle?: 'aggressive' | 'neutral' | 'conservative';
   watchlist: WatchlistItem[];
   groups?: UserGroup[];
+  /** v2.8 portfolio tracking */
+  portfolios?: Portfolio[];
+  portfolioAssignments?: PortfolioAssignment[];
   /** Desktop widget: 1–5 codes from watchlist */
   widgetPinnedCodes?: string[];
   /** Desktop widget window opacity 0.70–1.00 */

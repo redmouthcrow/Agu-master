@@ -1290,6 +1290,90 @@ export function useAppState() {
     persistConfig();
   }
 
+  // --- Portfolio functions (v2.8) ---
+
+  function addPortfolio(name: string): boolean {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.length > 10) return false;
+    const portfolios = config.value.portfolios ?? [];
+    if (portfolios.some((p) => p.name === trimmed)) return false;
+    portfolios.push({ id: `pf_${Date.now()}`, name: trimmed, createdAt: new Date().toISOString() });
+    config.value.portfolios = portfolios;
+    persistConfig();
+    broadcastLiveSync();
+    return true;
+  }
+
+  function removePortfolio(id: string): void {
+    const portfolios = config.value.portfolios;
+    if (!portfolios) return;
+    config.value.portfolios = portfolios.filter((p) => p.id !== id);
+    config.value.portfolioAssignments = (config.value.portfolioAssignments ?? []).filter(
+      (a) => a.portfolioId !== id,
+    );
+    persistConfig();
+    broadcastLiveSync();
+  }
+
+  function renamePortfolio(id: string, name: string): boolean {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.length > 10) return false;
+    const portfolio = (config.value.portfolios ?? []).find((p) => p.id === id);
+    if (!portfolio) return false;
+    if ((config.value.portfolios ?? []).some((p) => p.id !== id && p.name === trimmed)) return false;
+    portfolio.name = trimmed;
+    persistConfig();
+    broadcastLiveSync();
+    return true;
+  }
+
+  function upsertAssignment(code: string, portfolioId: string, weight: number): void {
+    const assignments = config.value.portfolioAssignments ?? [];
+    const idx = assignments.findIndex((a) => a.code === code && a.portfolioId === portfolioId);
+    if (idx >= 0) {
+      assignments[idx].weight = weight;
+    } else {
+      assignments.push({ code, portfolioId, weight });
+    }
+    // Normalize: keep weights within 0-100 range, sum may not equal 100.
+    config.value.portfolioAssignments = assignments;
+    persistConfig();
+    broadcastLiveSync();
+  }
+
+  function removeAssignment(code: string, portfolioId: string): void {
+    config.value.portfolioAssignments = (config.value.portfolioAssignments ?? []).filter(
+      (a) => !(a.code === code && a.portfolioId === portfolioId),
+    );
+    persistConfig();
+    broadcastLiveSync();
+  }
+
+  function getTrackingCodes(): string[] {
+    const assignments = config.value.portfolioAssignments ?? [];
+    return [...new Set(assignments.map((a) => a.code))];
+  }
+
+  /** Compute weighted change% for a portfolio. Returns null if no valid data. */
+  function computePortfolioChange(portfolioId: string): number | null {
+    const assignments = (config.value.portfolioAssignments ?? []).filter(
+      (a) => a.portfolioId === portfolioId,
+    );
+    if (assignments.length === 0) return null;
+
+    let totalWeight = 0;
+    let weightedSum = 0;
+    for (const a of assignments) {
+      const card = cards.value.find((c) => c.stock.code === a.code);
+      const snap = card?.snapshot;
+      if (!snap || snap.changePct == null) continue;
+      weightedSum += a.weight * snap.changePct;
+      totalWeight += a.weight;
+    }
+    if (totalWeight === 0) return null;
+    return Math.round((weightedSum / totalWeight) * 100) / 100;
+  }
+
   return {
     config,
     cards,
@@ -1376,5 +1460,12 @@ export function useAppState() {
     removeGroup,
     setSecurityGroup,
     toggleGroupCollapse,
+    addPortfolio,
+    removePortfolio,
+    renamePortfolio,
+    upsertAssignment,
+    removeAssignment,
+    getTrackingCodes,
+    computePortfolioChange,
   };
 }

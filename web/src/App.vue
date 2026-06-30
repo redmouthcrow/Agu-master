@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import ConfigPanel from './components/ConfigPanel.vue';
 import Sidebar from './components/Sidebar.vue';
 import StockCard from './components/StockCard.vue';
+import PortfolioCard from './components/PortfolioCard.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import { useAppState } from './composables/useAppState';
 import { DEFAULT_GROUP_ID } from './types';
@@ -44,6 +45,10 @@ const {
   removeGroup,
   setSecurityGroup,
   toggleGroupCollapse,
+  /* addPortfolio — used by ConfigPanel, referenced via template emit */
+  removePortfolio,
+  computePortfolioChange,
+  getTrackingCodes,
 } = useAppState();
 
 const groups = computed(() => config.value.groups ?? []);
@@ -61,10 +66,27 @@ const groupCounts = computed(() => {
       map[w.groupId] = (map[w.groupId] ?? 0) + 1;
     }
   }
-  return map;
-});
+    return map;
+  });
 
-const groupedCards = computed(() => {
+  // v2.8 portfolio data
+  const portfolios = computed(() => config.value.portfolios ?? []);
+  const assignments = computed(() => config.value.portfolioAssignments ?? []);
+  const trackingCodes = computed(() => new Set(getTrackingCodes()));
+  const holdingsMap = computed(() => {
+    const map: Record<string, { name: string; changePct: number | null }> = {};
+    for (const card of cards.value) {
+      if (trackingCodes.value.has(card.stock.code)) {
+        map[card.stock.code] = {
+          name: card.stock.name || card.stock.code,
+          changePct: card.snapshot?.changePct ?? null,
+        };
+      }
+    }
+    return map;
+  });
+
+  const groupedCards = computed(() => {
   const result: { group: { id: string; name: string; collapsed: boolean } | null; cards: typeof cards.value }[] = [];
   const sortedGroups = [...groups.value].sort((a, b) => a.order - b.order);
   const handled = new Set<string>();
@@ -131,6 +153,18 @@ onMounted(() => {
       />
 
       <main class="main">
+        <!-- v2.8 portfolio cards -->
+        <PortfolioCard
+          v-for="p in portfolios"
+          :key="p.id"
+          :portfolio="p"
+          :assets="assignments.filter(a => a.portfolioId === p.id)"
+          :change-pct="computePortfolioChange(p.id)"
+          :holdings="holdingsMap"
+          @refresh="runRefresh(true)"
+          @remove="removePortfolio(p.id)"
+        />
+
         <div
           v-if="watchlistCount === 0"
           class="empty-state"
