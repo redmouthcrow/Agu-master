@@ -8,6 +8,15 @@
 
 ---
 
+## 2.6.4 - 2026-06-30
+
+### 变更类型：修复（修订版本）
+
+### 修复
+- **持仓保存后刷新按钮失效**：updateSymbolPosition 的 card.stock = { ...item } 打断了共享引用，cycleRefreshMode 改的是 config 旧引用，UI 读的是独立副本。修复：cycleRefreshMode 显式同步 card.stock.refreshMode
+
+---
+
 ## 2.6.3 - 2026-06-18
 
 ### 变更类型：修复（修订版本）

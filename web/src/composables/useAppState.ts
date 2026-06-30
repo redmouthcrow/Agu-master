@@ -1187,6 +1187,11 @@ export function useAppState() {
       return;
     }
     item.refreshMode = next;
+    // Sync card so the UI toggle picks up the change.
+    const card = cards.value.find((c) => c.stock.code === code);
+    if (card) {
+      card.stock.refreshMode = next;
+    }
     persistConfig();
     broadcastLiveSync();
     manageHighFreqScheduler();
