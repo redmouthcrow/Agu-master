@@ -45,10 +45,12 @@ const {
   removeGroup,
   setSecurityGroup,
   toggleGroupCollapse,
-  /* addPortfolio — used by ConfigPanel, referenced via template emit */
+  addPortfolio,
+  renamePortfolio,
   removePortfolio,
   computePortfolioChange,
   getTrackingCodes,
+  upsertAssignment,
 } = useAppState();
 
 const groups = computed(() => config.value.groups ?? []);
@@ -122,11 +124,15 @@ onMounted(() => {
       :watchlist-count="watchlistCount"
       :ungrouped-count="ungroupedCount"
       :group-counts="groupCounts"
+      :portfolios="portfolios"
       :collapsed="sidebarCollapsed"
       @toggle-collapse="sidebarCollapsed = !sidebarCollapsed"
       @add-group="addGroup"
       @rename-group="renameGroup"
       @remove-group="removeGroup"
+      @add-portfolio="addPortfolio"
+      @rename-portfolio="renamePortfolio"
+      @remove-portfolio="removePortfolio"
     />
 
     <div class="app-main">
@@ -163,6 +169,7 @@ onMounted(() => {
           :holdings="holdingsMap"
           @refresh="runRefresh(true)"
           @remove="removePortfolio(p.id)"
+          @update-weight="(code, w) => upsertAssignment(code, p.id, w)"
         />
 
         <div

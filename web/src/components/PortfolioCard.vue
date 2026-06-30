@@ -15,9 +15,25 @@ const emit = defineEmits<{
   remove: [];
   rename: [name: string];
   addAsset: [];
+  updateWeight: [code: string, weight: number];
 }>();
 
 const expanded = ref(true);
+const editingWeight = ref<string | null>(null);
+const editWtValue = ref('');
+
+function startEditWeight(code: string, currentWt: number) {
+  editingWeight.value = code;
+  editWtValue.value = String(currentWt);
+}
+
+function confirmWeight(code: string) {
+  const w = Number(editWtValue.value);
+  if (!isNaN(w) && w > 0 && w <= 100) {
+    emit('updateWeight', code, w);
+  }
+  editingWeight.value = null;
+}
 
 const top3 = computed(() =>
   [...props.assets]
@@ -62,7 +78,21 @@ const changeText = computed(() => {
         >
           <span class="pf-code">{{ a.code.replace(/^(sh|sz|bj)/i, '') }}</span>
           <span class="pf-name-split">{{ props.holdings[a.code]?.name ?? a.code }}</span>
-          <span class="pf-wt">{{ a.weight }}%</span>
+          <span class="pf-wt" @click.stop="startEditWeight(a.code, a.weight)">
+            <template v-if="editingWeight === a.code">
+              <input
+                v-model="editWtValue"
+                type="number"
+                min="0"
+                max="100"
+                class="wt-input"
+                @keyup.enter="confirmWeight(a.code)"
+                @keyup.escape="editingWeight = null"
+                @blur="confirmWeight(a.code)"
+              />
+            </template>
+            <template v-else>{{ a.weight }}%</template>
+          </span>
           <span
             class="pf-row-pct"
             :class="(props.holdings[a.code]?.changePct ?? 0) >= 0 ? 'up' : 'down'"
@@ -110,6 +140,8 @@ const changeText = computed(() => {
 }
 .pf-change.up { color: var(--up); }
 .pf-change.down { color: var(--down); }
+
+.wt-input { width: 44px; min-height: 20px; padding: 1px 3px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 11px; text-align: right; }
 
 .btn-refresh {
   background: none;

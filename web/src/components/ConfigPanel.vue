@@ -32,7 +32,31 @@ const emit = defineEmits<{
   syncCalendar: [];
   toast: [message: string];
   exportBackup: [];
+  removeAssignment: [code: string, portfolioId: string];
 }>();
+
+// v2.8 portfolio asset management
+const selectedPfId = ref('');
+const pfCode = ref('');
+const pfWeight = ref('');
+
+function addPfAsset() {
+  const code = pfCode.value.trim();
+  const w = Number(pfWeight.value);
+  if (!code || isNaN(w) || w <= 0 || w > 100 || !selectedPfId.value) return;
+  emit('removeAssignment', code, selectedPfId.value); // clear old weight first
+  // add via save (upsert handled by useAppState)
+  emit('save', {
+    portfolioAssignments: [
+      ...(props.config.portfolioAssignments ?? []).filter(
+        (a) => !(a.code === code && a.portfolioId === selectedPfId.value),
+      ),
+      { code, portfolioId: selectedPfId.value, weight: w },
+    ],
+  } as Partial<AppConfig>);
+  pfCode.value = '';
+  pfWeight.value = '';
+}
 
 const { t } = useI18n();
 
@@ -358,7 +382,41 @@ function onAlwaysOnTopChange(e: Event) {
             </label>
           </template>
         </section>
+        <!-- v2.8 portfolio asset management -->
+        <section v-if="(config.portfolios?.length ?? 0) > 0" class="config-section">
+          <h3 class="section-subtitle">组合管理</h3>
+          <label class="field">
+            <span>选择组合</span>
+            <select v-model="selectedPfId" class="field-select">
+              <option value="">—</option>
+              <option v-for="p in config.portfolios" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+          </label>
+          <template v-if="selectedPfId">
+            <div class="pf-assets-list">
+              <div v-for="a in config.portfolioAssignments?.filter(x => x.portfolioId === selectedPfId) ?? []" :key="a.code" class="pf-row">
+                <span>{{ a.code }}</span>
+                <span>{{ a.weight }}%</span>
+                <button class="btn-link btn-link-sm" @click="emit('removeAssignment', a.code, selectedPfId)">×</button>
+              </div>
+            </div>
+            <div class="edit-row">
+              <input v-model="pfCode" type="text" maxlength="8" placeholder="代码" class="edit-input" />
+              <input v-model="pfWeight" type="number" min="0" max="100" placeholder="权重%" class="edit-input-narrow" />
+              <button type="button" class="btn-link btn-link-sm" @click="addPfAsset">添加</button>
+            </div>
+          </template>
+        </section>
       </section>
     </section>
   </header>
 </template>
+
+<style scoped>
+.section-subtitle { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.pf-assets-list { margin-bottom: 4px; }
+.pf-row { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 0; }
+.edit-row { display: flex; align-items: center; gap: 4px; }
+.edit-input { flex: 1; min-width: 0; min-height: 26px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
+.edit-input-narrow { width: 52px; min-height: 26px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
+</style>
