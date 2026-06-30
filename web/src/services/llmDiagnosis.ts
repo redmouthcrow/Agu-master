@@ -19,16 +19,28 @@ const SYSTEM_PROMPT_BASE = `# Role
 
 # Analysis Framework (量价分析核心框架)
 在评估数据时，你必须严格遵循以下量化技术逻辑：
-1. 量价配合：对比当前 30 分钟成交量与日内平均量能，判断是“真实突破”、“诱多/诱空放量”还是“流动性枯竭导致的无量滑头”。
+1. 量价配合：对比当前 30 分钟成交量与日内平均量能，判断是真实突破、诱多/诱空放量还是流动性枯竭导致的无量滑头。
 2. K线形态位置：结合今日最高、最低价、开盘价与当前价，评估当前 K 线在日内振幅中所处的位置（如：长上影线代表上方抛压，光头阳线代表多头动能强劲）。
 3. 趋势与位置：识别当前价格相对于关键支撑/阻力位（由今日高低点或成交密集区衍生）的相对空间。
 
 # Execution Rules (约束条件)
-1. 操作提示 (signal)：必须从以下五个标准标签中根据量价诊断结果精确选择一个，严禁自行创造：“多头持股”、“持股观望”、“逢高减仓”、“逢低做T”、“空仓观望”。选择依据：有浮盈且日内动能强劲→多头持股；有浮盈但动能衰减、盈亏幅度微小（pnlPct绝对值 < 2%）→优先持股观望而非逢高减仓；浮盈较大（pnlPct > 5%）且出现放量滞涨/长上影→逢高减仓；盘中急跌至支撑位附近→逢低做T。
-2. 形态诊断 (analysis)：限 50 字以内。必须包含【一个显性量价特征】（如：30m放量滞涨）+【一个短期趋势推导】（如：向日内低点回踩测试支撑）。
-3. 风险预测 (risk)：限 50 字以内。必须指出明确的【右侧破位条件】或【动能衰竭信号】（如：一旦跌破今日低点XX元将引发多头踩踏，或：MACD 30m级别顶背离隐患）。
-4. 关键位 (supportLevel / resistanceLevel)：根据当前快照的 price、high、low、prevClose 及量价特征，推算最贴近当前价格的【近端技术支撑位】和【近端技术压力位】。单位为元，保留 3 位小数。支撑位应低于当前价，压力位应高于当前价。
-5. 建仓建议 (buildPositionAdvice)：限 30 字以内。必须锚定上述 supportLevel / resistanceLevel 与当前价 price 的相对位置，给出建仓方向与建议价位（如「可等待放量企稳支撑位后轻仓试多」「接近阻力位暂不建议追高建仓」）。严禁脱离关键位凭�空给出买卖建议。
+1. 操作提示 (signal)：必须从以下五个标准标签中根据量价诊断结果精确选择一个，严禁自行创造：多头持股、持股观望、逢高减仓、逢低做T、空仓观望。选择依据：有浮盈且日内动能强劲→多头持股；有浮盈但动能衰减、盈亏幅度微小（pnlPct绝对值 < 2%）→优先持股观望而非逢高减仓；浮盈较大（pnlPct > 5%）且出现放量滞涨/长上影→逢高减仓；盘中急跌至支撑位附近→逢低做T。
+2. 形态诊断 (analysis)：限 50 字以内。必须包含一个显性量价特征（如：30m放量滞涨）+ 一个短期趋势推导（如：向日内低点回踩测试支撑）。
+3. 风险预测 (risk)：限 50 字以内。必须指出明确的右侧破位条件或动能衰竭信号（如：一旦跌破今日低点XX元将引发多头踩踏，或：MACD 30m级别顶背离隐患）。
+4. 关键位 (supportLevel / resistanceLevel)：根据当前快照的 price、high、low、prevClose 及量价特征，推算最贴近当前价格的近端技术支撑位和近端技术压力位。单位为元，保留 3 位小数。支撑位应低于当前价，压力位应高于当前价。
+5. 建仓建议 (buildPositionAdvice)：限 30 字以内。必须锚定上述 supportLevel / resistanceLevel 与当前价 price 的相对位置，给出建仓方向与建议价位（如：可等待放量企稳支撑位后轻仓试多 / 接近阻力位暂不建议追高建仓）。严禁脱离关键位凭空给出买卖建议。
+
+# Investment Style (投资风格)
+当前用户投资风格：{styleLabel}。你必须根据此风格调整风险偏好与建议措辞：
+- 激进（aggressive）：偏好积极操作，减仓阈值为 pnlPct > 8%。优先提示加仓/做T机会，波段建议可给出更乐观的目标位。
+- 中立（neutral）：平衡风险收益，减仓阈值为 pnlPct > 5%。波段建议锚定关键位，不激进不保守。
+- 保守（conservative）：以保本和风控为最高优先级，减仓阈值为 pnlPct > 3%。即使技术面偏多，也应以防御性建议为主。
+
+# Forward-Looking Analysis (前瞻分析)
+你必须基于日内数据做出前瞻性判断，而非仅描述当前状态：
+- 根据日内振幅（high-low）、当前价在日内区间的位置（positionInRange）、较昨收涨跌方向、量能水平，推断当日最可能的走势方向（偏多上行 / 偏空下行 / 窄幅震荡）
+- analysis 中体现推断方向，risk 中指出判断错误时的关键破位条件
+- bandAction / buildPositionAdvice 中给出基于关键位的波段趋势预判
 
 # Output Format
 必须严格按照以下 JSON 格式响应，不要包含任何 markdown 标记（如 \`\`\`json）或多余的解释文字：
@@ -44,7 +56,7 @@ const SYSTEM_PROMPT_BASE = `# Role
 const SYSTEM_PROMPT_WITH_POSITION = `${SYSTEM_PROMPT_BASE}
 
 # Position Context (持仓上下文)
-当 User Message 包含持仓信息（qty、cost、pnlPct）时，必须额外输出 shortAction 字段（不超过30字），结合浮动盈亏率 pnlPct 与 signal 给出可执行短期持仓建议。**严禁对微小浮动盈亏（pnlPct 绝对值 < 2%）给出减仓建议**——浮盈幅度尚未覆盖交易成本（印花税+佣金约0.1%），减仓无意义。微盈时信号应为「多头持股」或「持股观望」，shortAction 建议「持有」或「可继续持有，关注关键位得失」。仅当 pnlPct > 5% 且技术面走弱时方可建议减仓。JSON 格式：
+当 User Message 包含持仓信息（qty、cost、pnlPct）时，必须额外输出 shortAction 字段（不超过30字），结合浮动盈亏率 pnlPct 与 signal 给出可执行短期持仓建议。严禁对微小浮动盈亏（pnlPct 绝对值 < 2%）给出减仓建议——微盈时信号应为多头持股或持股观望，shortAction 建议持有或关注关键位得失。JSON 格式：
 {
   "signal": "4字标准标签",
   "analysis": "高密度量价技术面诊断（不超过50字）",
@@ -55,6 +67,12 @@ const SYSTEM_PROMPT_WITH_POSITION = `${SYSTEM_PROMPT_BASE}
   "resistanceLevel": 6.85
 }`;
 
+const STYLE_LABELS: Record<string, string> = {
+  aggressive: '激进',
+  neutral: '中立',
+  conservative: '保守',
+};
+
 function typeLabel(type: QuoteSnapshot['instrumentType']): string {
   return type === 'fund_etf' ? '场内基金' : 'A股';
 }
@@ -64,13 +82,39 @@ function buildUserMessage(
   watchlistItem: WatchlistItem,
   alignedTime: string,
   session: SessionLabel,
+  investmentStyle: string,
 ): string {
   const volume = formatVolumeForPrompt(snapshot.volume, session);
   const change =
     snapshot.changePct === null ? 'null' : `${snapshot.changePct.toFixed(2)}`;
 
-  let msg = `【${snapshot.name} ${snapshot.code} | ${typeLabel(snapshot.instrumentType)}】对齐时刻 ${alignedTime} | ${session}
-快照: price=${snapshot.price}, changePct=${change}%, high=${snapshot.high}, low=${snapshot.low}, volume=${volume}, prevClose=${snapshot.prevClose}`;
+  // v2.7: intraday context for forward-looking analysis.
+  const high = snapshot.high;
+  const low = snapshot.low;
+  const prevClose = snapshot.prevClose;
+  let amplitude = 'null';
+  let positionInRange = 'null';
+  let direction = 'null';
+  if (high != null && low != null && prevClose != null) {
+    amplitude = (high - low).toFixed(2);
+    positionInRange =
+      snapshot.price != null
+        ? ((snapshot.price - low) / (high - low) * 100).toFixed(1)
+        : 'null';
+    direction =
+      snapshot.price != null
+        ? snapshot.price > prevClose
+          ? '高开上行'
+          : snapshot.price < prevClose
+          ? '低开下行'
+          : '平开'
+        : 'null';
+  }
+
+  let msg = `${snapshot.name} ${snapshot.code} | ${typeLabel(snapshot.instrumentType)} | 对齐 ${alignedTime} | ${session}
+快照: price=${snapshot.price}, changePct=${change}%, high=${high}, low=${low}, volume=${volume}, prevClose=${prevClose}
+日内: 振幅=${amplitude}, 位置=${positionInRange}%(0=最低,100=最高), 方向=${direction}
+风格: ${STYLE_LABELS[investmentStyle] ?? '中立'}`;
 
   if (hasPosition(watchlistItem)) {
     const pnl = calcPnlPct(snapshot.price, watchlistItem.costPrice!);
@@ -102,16 +146,21 @@ export async function runDiagnosis(
 ): Promise<{ ok: true; data: DiagnosisResult } | { ok: false; raw: string }> {
   const withPosition = hasPosition(watchlistItem);
   const base = config.baseUrl.replace(/\/$/, '');
+  const style = config.investmentStyle ?? 'neutral';
+  const styleLabel = STYLE_LABELS[style] ?? '中立';
+
+  // Inject style label into the system prompt template.
+  const systemContent = (
+    withPosition ? SYSTEM_PROMPT_WITH_POSITION : SYSTEM_PROMPT_BASE
+  ).replace('{styleLabel}', styleLabel);
+
   const body = {
     model: config.model,
     messages: [
-      {
-        role: 'system',
-        content: withPosition ? SYSTEM_PROMPT_WITH_POSITION : SYSTEM_PROMPT_BASE,
-      },
+      { role: 'system', content: systemContent },
       {
         role: 'user',
-        content: buildUserMessage(snapshot, watchlistItem, alignedTime, session),
+        content: buildUserMessage(snapshot, watchlistItem, alignedTime, session, style),
       },
     ],
     response_format: { type: 'json_object' },
@@ -149,9 +198,7 @@ export async function runDiagnosis(
     if (!isValidSignal(parsed.signal)) {
       return { ok: false, raw };
     }
-    // v2.6: two exclusive output paths based on position configuration.
     if (withPosition) {
-      // With position: shortAction + bandAction both required, both anchor-checked.
       if (!parsed.shortAction || parsed.shortAction.length > 30) {
         return { ok: false, raw };
       }
@@ -163,7 +210,6 @@ export async function runDiagnosis(
         return { ok: false, raw };
       }
     } else {
-      // Without position (observation mode): buildPositionAdvice required, anchor-checked.
       if (
         !parsed.buildPositionAdvice ||
         parsed.buildPositionAdvice.length > 30 ||
@@ -186,25 +232,17 @@ export async function runDiagnosis(
   }
 }
 
-/**
- * v2.6 anchor check: advice field must reference supportLevel or resistanceLevel
- * (the numeric value, allowing rounding drift) so the AI cannot hand back a
- * free-floating opinion. Matches the value as a string substring.
- */
 function anchorsToKeyLevel(
-  bandAction: string,
+  advice: string,
   support?: number,
   resistance?: number,
 ): boolean {
   const candidates: string[] = [];
   for (const v of [support, resistance]) {
-    if (v == null || Number.isNaN(v)) {
-      continue;
-    }
-    // Tolerate up to 2-decimal rounding drift (AI may write 6.12 as 6.1).
+    if (v == null || Number.isNaN(v)) continue;
     candidates.push(v.toFixed(2), v.toFixed(1), String(v));
   }
-  return candidates.some((c) => bandAction.includes(c));
+  return candidates.some((c) => advice.includes(c));
 }
 
 export function sleep(ms: number): Promise<void> {

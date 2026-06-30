@@ -154,6 +154,7 @@ const defaultConfig: AppConfig = {
   baseUrl: 'https://api.deepseek.com/v1',
   apiKey: '',
   model: 'deepseek-chat',
+  investmentStyle: 'neutral',
   refreshFrequency: 30,
   watchlist: [],
   widgetPinnedCodes: [],

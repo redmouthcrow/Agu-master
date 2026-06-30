@@ -191,6 +191,18 @@ function onAlwaysOnTopChange(e: Event) {
         />
       </label>
       <label class="field">
+        <span>{{ t('config.investmentStyle') }}</span>
+        <select
+          :value="config.investmentStyle ?? 'neutral'"
+          class="field-select"
+          @change="emit('save', { investmentStyle: ($event.target as HTMLSelectElement).value as AppConfig['investmentStyle'] })"
+        >
+          <option value="aggressive">{{ t('config.styleAggressive') }}</option>
+          <option value="neutral">{{ t('config.styleNeutral') }}</option>
+          <option value="conservative">{{ t('config.styleConservative') }}</option>
+        </select>
+      </label>
+      <label class="field">
         <span>{{ t('config.refreshFrequency') }}</span>
         <select
           :value="config.refreshFrequency"

@@ -78,6 +78,8 @@ export interface AppConfig {
   apiKey: string;
   model: string;
   refreshFrequency: RefreshFrequency;
+  /** Global investment style (v2.7): aggressive | neutral | conservative. */
+  investmentStyle?: 'aggressive' | 'neutral' | 'conservative';
   watchlist: WatchlistItem[];
   groups?: UserGroup[];
   /** Desktop widget: 1–5 codes from watchlist */
