@@ -8,12 +8,15 @@
 
 ---
 
-## 2.6.4 - 2026-06-30
+## 2.6.5 - 2026-06-30
 
-### 变更类型：修复（修订版本）
+### 变更类型：修改（修订版本）
 
-### 修复
-- **持仓保存后刷新按钮失效**：updateSymbolPosition 的 card.stock = { ...item } 打断了共享引用，cycleRefreshMode 改的是 config 旧引用，UI 读的是独立副本。修复：cycleRefreshMode 显式同步 card.stock.refreshMode
+### 修改
+- **Signal 词库从 4 档扩充为 5 档**：新增「持股观望」，解决 AI 缺乏中性选项导致小盈利也建议减仓的问题
+- **ShortAction Prompt 加盈亏阈值**：pnlPct < 2% 禁止减仓建议（微盈未覆盖交易成本）；pnlPct > 5% + 技术面走弱方可减仓
+- **Signal 选择逻辑明确化**：微盈→持股观望/多头持股；大盈+走弱→逢高减仓
+- **UI-Spec 同步**：signal 配色表新增持股观望（neutral 灰）
 
 ---
 

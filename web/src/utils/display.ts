@@ -3,6 +3,7 @@ import type { SignalTone } from '../types';
 
 const SIGNAL_TONE_MAP: Record<StandardSignal, SignalTone> = {
   多头持股: 'bullish',
+  持股观望: 'neutral',
   逢高减仓: 'bearish',
   '逢低做T': 'bullish',
   空仓观望: 'neutral',
