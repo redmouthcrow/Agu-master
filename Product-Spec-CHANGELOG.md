@@ -8,7 +8,37 @@
 
 ---
 
-## 2.7.0 - 2026-07-01
+## 2.8.0 - 2026-07-01
+
+### 变更类型：新增（次版本）
+
+### 新增功能
+- **组合汇总与追踪池**：
+  - 新增 `Portfolio` / `PortfolioAssignment` 类型，AppConfig 扩展 `portfolios[]` / `portfolioAssignments[]`
+  - 侧边栏下方新增组合列表（新建/重命名/删除/↑↓排序）
+  - 诊断池上方渲染组合卡片（组合名+加权涨跌+TOP3 持仓+折叠详情）
+  - 组合内直接添加证券（代码+权重），自动规范化代码（A股/港股均支持）
+  - 每只证券可编辑权重（✎ 按钮 → 行内输入 → 保存）
+  - 每只证券可 × 删除出组合
+  - 组合刷新独立于诊断池（`refreshTrackingQuotes`），也跟随配置刷新频率自动执行
+  - `trackingSnapshots` Map 独立存储追踪行情（不依赖诊断池 card）
+- **港股代码支持**：Market 新增 `'hk'`，识别 5 位代码（`00700` / `hk00700`）
+- **WatchlistItem.trackingOnly**：追踪证券不显示在诊断池/未分组
+- **组合权重排序**：按权重降序展示
+
+### 修改功能
+- **功能 1**：AppConfig 新增 `portfolios`、`portfolioAssignments`、`investmentStyle`
+- **功能 4**：新增 `refreshTrackingQuotes` 独立追踪池刷新
+- **功能 9**：组合汇总与追踪池
+
+### 修复
+- 组合/分组排序（↑↓ 箭头，`moveGroupUp/Down` / `movePortfolioUp/Down`）
+- 组合持久化（JSON 序列化去 Vue Proxy）
+- 组合刷新跟随配置频率自动执行
+- 刷新开关关闭时全局刷新跳过该卡片
+- 启动时自动全局刷新
+
+---
 
 ### 变更类型：新增（次版本）
 
