@@ -1455,7 +1455,7 @@ export function useAppState() {
     const assignments = (config.value.portfolioAssignments ?? []).filter(
       (a) => a.portfolioId === portfolioId,
     );
-    if (assignments.length === 0) return null;
+    const portfolio = (config.value.portfolios ?? []).find((p) => p.id === portfolioId);
 
     let totalWeight = 0;
     let weightedSum = 0;
@@ -1465,11 +1465,19 @@ export function useAppState() {
       weightedSum += a.weight * snap.changePct;
       totalWeight += a.weight;
     }
-    if (totalWeight === 0) return null;
+
+    // No configured securities: return sector change directly if available.
+    if (totalWeight === 0) {
+      if (portfolio?.sectorCode) {
+        const snap = trackingSnapshots.value.get(portfolio.sectorCode);
+        return snap?.changePct != null ? Math.round(snap.changePct * 100) / 100 : null;
+      }
+      return null;
+    }
+
     const direct = Math.round((weightedSum / totalWeight) * 100) / 100;
 
     // Sector compensation: remaining weight × sector change%.
-    const portfolio = (config.value.portfolios ?? []).find((p) => p.id === portfolioId);
     if (portfolio?.sectorCode && totalWeight < 100) {
       const sectorSnap = trackingSnapshots.value.get(portfolio.sectorCode);
       if (sectorSnap?.changePct != null) {
