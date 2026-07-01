@@ -44,6 +44,7 @@ const emit = defineEmits<{
   moveGroupDown: [id: string];
   movePortfolioUp: [id: string];
   movePortfolioDown: [id: string];
+  setPortfolioSector: [id: string, sectorCode: string];
   openAbout: [];
 }>();
 
@@ -151,6 +152,9 @@ function cancelPfRename() { editingPfId.value = null; editPfName.value = ''; }
             </template>
             <template v-else>
               <span class="item-name">📊 {{ p.name }}</span>
+              <select class="sector-select" :value="p.sectorCode ?? ''" @change="emit('setPortfolioSector', p.id, ($event.target as HTMLSelectElement).value)">
+                <option v-for="s in SECTORS" :key="s.code" :value="s.code">{{ s.name }}</option>
+              </select>
               <button class="btn-arrow" @click="emit('movePortfolioUp', p.id)" title="上移">↑</button>
               <button class="btn-arrow" @click="emit('movePortfolioDown', p.id)" title="下移">↓</button>
               <button class="btn-menu" @click="startPfRename(p)">重命名</button>

@@ -49,6 +49,7 @@ const {
   toggleGroupCollapse,
   addPortfolio,
   renamePortfolio,
+  setPortfolioSector,
   removePortfolio,
   computePortfolioChange,
   getTrackingCodes,
@@ -150,6 +151,7 @@ onMounted(() => {
       @remove-portfolio="removePortfolio"
       @move-portfolio-up="movePortfolioUp"
       @move-portfolio-down="movePortfolioDown"
+      @set-portfolio-sector="(id, sc) => setPortfolioSector(id, sc)"
       @open-about="aboutOpen = true"
     />
 

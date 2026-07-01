@@ -1335,6 +1335,14 @@ export function useAppState() {
     return true;
   }
 
+  function setPortfolioSector(id: string, sectorCode: string): void {
+    const p = (config.value.portfolios ?? []).find((x) => x.id === id);
+    if (!p) return;
+    p.sectorCode = sectorCode || undefined;
+    persistConfig();
+    broadcastLiveSync();
+  }
+
   function upsertAssignment(code: string, portfolioId: string, weight: number): void {
     const assignments = config.value.portfolioAssignments ?? [];
     const idx = assignments.findIndex((a) => a.code === code && a.portfolioId === portfolioId);
@@ -1562,6 +1570,7 @@ export function useAppState() {
     addPortfolio,
     removePortfolio,
     renamePortfolio,
+    setPortfolioSector,
     upsertAssignment,
     removeAssignment,
     getTrackingCodes,
