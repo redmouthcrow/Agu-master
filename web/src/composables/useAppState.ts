@@ -294,8 +294,9 @@ async function flushDesktopPersistence(): Promise<void> {
     diagnosisSaveTimer = null;
   }
   const payload = cloneLiveSyncPayload(buildLiveSyncPayload());
+  const plain = JSON.parse(JSON.stringify(config.value)) as AppConfig;
   await Promise.all([
-    saveDesktopConfig(config.value),
+    saveDesktopConfig(plain),
     saveDesktopDiagnosisCache(getDiagnosisCache()),
     saveDesktopLiveSync(payload),
   ]);
@@ -318,14 +319,16 @@ function persistConfig() {
   if (usingFileConfig.value) {
     return;
   }
+  // Strip Vue reactivity proxies before serialisation.
+  const plain = JSON.parse(JSON.stringify(config.value)) as AppConfig;
   if (isDesktopRuntime()) {
     if (!canPersistDesktopConfig()) {
       return;
     }
-    void saveDesktopConfig(config.value);
+    void saveDesktopConfig(plain);
     return;
   }
-  if (!setItem(CONFIG_KEY, config.value)) {
+  if (!setItem(CONFIG_KEY, plain)) {
     showToast(t('toast.storageWriteFailed'));
   }
 }
