@@ -1023,6 +1023,7 @@ export function useAppState() {
     stopScheduler = createAlignScheduler(() => {
       if (isInAutoTradingWindow(isTradingDay())) {
         void runRefresh(false);
+        void refreshTrackingQuotes();
       }
     }, config.value.refreshFrequency);
     manageHighFreqScheduler();
@@ -1155,6 +1156,7 @@ export function useAppState() {
       startScheduler();
       if (isInAutoTradingWindow(isTradingDay())) {
         await runRefresh(false);
+        void refreshTrackingQuotes();
       } else {
         broadcastLiveSync();
       }
