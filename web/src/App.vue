@@ -50,6 +50,7 @@ const {
   removePortfolio,
   computePortfolioChange,
   getTrackingCodes,
+  refreshTrackingQuotes,
   upsertAssignment,
   moveGroupUp,
   moveGroupDown,
@@ -175,7 +176,7 @@ onMounted(() => {
           :assets="assignments.filter(a => a.portfolioId === p.id)"
           :change-pct="computePortfolioChange(p.id)"
           :holdings="holdingsMap"
-          @refresh="runRefresh(true)"
+          @refresh="refreshTrackingQuotes"
           @remove="removePortfolio(p.id)"
           @update-weight="(code, w) => upsertAssignment(code, p.id, w)"
           @add-asset="(code, w) => { addSymbol(code); upsertAssignment(code, p.id, w); }"

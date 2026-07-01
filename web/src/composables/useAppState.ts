@@ -1403,6 +1403,27 @@ export function useAppState() {
     return [...new Set(assignments.map((a) => a.code))];
   }
 
+  let refreshingTracking = false;
+
+  async function refreshTrackingQuotes(): Promise<void> {
+    if (refreshingTracking) return;
+    const codes = getTrackingCodes();
+    if (codes.length === 0) return;
+    refreshingTracking = true;
+    try {
+      const quotes = await fetchQuotesWithFallback(codes);
+      for (const card of cards.value) {
+        const snap = quotes.get(card.stock.code);
+        if (snap) {
+          card.snapshot = { ...snap, instrumentType: card.stock.instrumentType };
+          if (card.stock.name !== snap.name) card.stock.name = snap.name;
+          if (snap.price != null) recordPrice(card.stock.code, snap.price);
+        }
+      }
+    } catch { /* silent */ }
+    finally { refreshingTracking = false; }
+  }
+
   /** Compute weighted change% for a portfolio. Returns null if no valid data. */
   function computePortfolioChange(portfolioId: string): number | null {
     const assignments = (config.value.portfolioAssignments ?? []).filter(
@@ -1516,6 +1537,7 @@ export function useAppState() {
     removeAssignment,
     getTrackingCodes,
     computePortfolioChange,
+    refreshTrackingQuotes,
     moveGroupUp,
     moveGroupDown,
     movePortfolioUp,

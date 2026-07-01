@@ -230,6 +230,6 @@ const changeText = computed(() => {
 }
 
 .pf-add-row { display: flex; align-items: center; gap: 4px; padding: 6px 0; }
-.add-code { width: 60px; min-height: 24px; padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 11px; }
-.add-wt { width: 42px; min-height: 24px; padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 11px; }
+.add-code { width: 72px; min-height: 26px; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
+.add-wt { width: 56px; min-height: 26px; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
 </style>
