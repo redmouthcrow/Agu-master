@@ -186,6 +186,8 @@ onMounted(() => {
           :assets="assignments.filter(a => a.portfolioId === p.id)"
           :change-pct="computePortfolioChange(p.id)"
           :holdings="holdingsMap"
+          :tracking-snapshots="trackingSnapshots"
+          :cards="cards"
           @refresh="refreshTrackingQuotes"
           @remove="removePortfolio(p.id)"
           @set-sector="(sc) => { setPortfolioSector(p.id, sc); refreshTrackingQuotes(); }"

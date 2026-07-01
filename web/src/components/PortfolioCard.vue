@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { Portfolio, PortfolioAssignment } from '../types';
+import type { Portfolio, PortfolioAssignment, StockCardState } from '../types';
 import { normalizeWatchlistSymbol } from '../utils/stockCode';
 
 const SECTORS = [
@@ -28,6 +28,8 @@ const props = defineProps<{
   changePct: number | null;
   /** Map code → { name, changePct } for rendering top holdings */
   holdings: Record<string, { name: string; changePct: number | null }>;
+  trackingSnapshots: Map<string, { name: string; price: number | null; changePct: number | null }>;
+  cards: StockCardState[];
 }>();
 
 const emit = defineEmits<{
@@ -90,15 +92,38 @@ const restCount = computed(() =>
   Math.max(0, props.assets.length - 3),
 );
 
-const changeClass = computed(() => {
-  if (props.changePct == null) return '';
-  return props.changePct >= 0 ? 'up' : 'down';
+const displayChange = computed(() => {
+  const portfolio = props.portfolio;
+  const assignments = props.assets;
+  let totalWeight = 0;
+  let weightedSum = 0;
+  for (const a of assignments) {
+    const snap = props.trackingSnapshots.get(a.code) ?? props.cards.find((c) => c.stock.code === a.code)?.snapshot;
+    if (!snap || snap.changePct == null) continue;
+    weightedSum += a.weight * snap.changePct;
+    totalWeight += a.weight;
+  }
+  if (totalWeight === 0) {
+    if (portfolio.sectorCode) {
+      const snap = props.trackingSnapshots.get(portfolio.sectorCode);
+      return snap?.changePct != null ? snap.changePct : null;
+    }
+    return null;
+  }
+  let result = Math.round((weightedSum / totalWeight) * 100) / 100;
+  if (portfolio.sectorCode && totalWeight < 100) {
+    const sectorSnap = props.trackingSnapshots.get(portfolio.sectorCode);
+    if (sectorSnap?.changePct != null) {
+      result = result + sectorSnap.changePct * ((100 - totalWeight) / 100);
+      result = Math.round(result * 100) / 100;
+    }
+  }
+  return result;
 });
 
-const changeText = computed(() => {
-  if (props.changePct == null) return '—';
-  const sign = props.changePct >= 0 ? '+' : '';
-  return `${sign}${props.changePct.toFixed(2)}%`;
+const changeClass = computed(() => {
+  if (displayChange.value == null) return '';
+  return displayChange.value >= 0 ? 'up' : 'down';
 });
 </script>
 
@@ -112,7 +137,7 @@ const changeText = computed(() => {
       <select class="pf-sector-select" :value="portfolio.sectorCode ?? ''" @change="emit('setSector', ($event.target as HTMLSelectElement).value)">
         <option v-for="s in SECTORS" :key="s.code" :value="s.code">{{ s.name }}</option>
       </select>
-      <span class="pf-change" :class="changeClass">{{ changeText }}</span>
+      <span class="pf-change" :class="changeClass">{{ displayChange != null ? (displayChange >= 0 ? '+' : '') + displayChange.toFixed(2) + '%' : '—' }}</span>
       <button type="button" class="btn-refresh" :disabled="loading" :title="loading ? '刷新中…' : '刷新组合行情'" @click="doRefresh">{{ loading ? '⌛' : '↻' }}</button>
       <button type="button" class="btn-remove" aria-label="删除组合" @click="emit('remove')">×</button>
     </header>
