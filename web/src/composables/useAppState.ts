@@ -1339,6 +1339,8 @@ export function useAppState() {
     const p = (config.value.portfolios ?? []).find((x) => x.id === id);
     if (!p) return;
     p.sectorCode = sectorCode || undefined;
+    // Force reactivity: replace array reference.
+    config.value.portfolios = [...(config.value.portfolios ?? [])];
     persistConfig();
     broadcastLiveSync();
   }
