@@ -178,7 +178,7 @@ onMounted(() => {
           @refresh="runRefresh(true)"
           @remove="removePortfolio(p.id)"
           @update-weight="(code, w) => upsertAssignment(code, p.id, w)"
-          @add-asset="configOpen = true"
+          @add-asset="(code, w) => { addSymbol(code); upsertAssignment(code, p.id, w); }"
         />
 
         <div

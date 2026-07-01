@@ -14,13 +14,16 @@ const emit = defineEmits<{
   refresh: [];
   remove: [];
   rename: [name: string];
-  addAsset: [];
+  addAsset: [code: string, weight: number];
   updateWeight: [code: string, weight: number];
 }>();
 
 const expanded = ref(true);
 const editingWeight = ref<string | null>(null);
 const editWtValue = ref('');
+const addingAsset = ref(false);
+const newAssetCode = ref('');
+const newAssetWt = ref('');
 
 function startEditWeight(code: string, currentWt: number) {
   editingWeight.value = code;
@@ -33,6 +36,16 @@ function confirmWeight(code: string) {
     emit('updateWeight', code, w);
   }
   editingWeight.value = null;
+}
+
+function confirmAddAsset() {
+  const code = newAssetCode.value.trim();
+  const w = Number(newAssetWt.value);
+  if (!code || isNaN(w) || w <= 0 || w > 100) return;
+  emit('addAsset', code, w);
+  newAssetCode.value = '';
+  newAssetWt.value = '';
+  addingAsset.value = false;
 }
 
 const top3 = computed(() =>
@@ -104,9 +117,17 @@ const changeText = computed(() => {
       <div v-if="restCount > 0" class="pf-rest">
         + 其余 {{ restCount }} 只持仓
       </div>
-      <button type="button" class="btn-link btn-link-sm" @click="emit('addAsset')">
-        + 添加证券
-      </button>
+      <div v-if="!addingAsset" class="pf-rest">
+        <button type="button" class="btn-link btn-link-sm" @click="addingAsset = true">
+          + 添加证券
+        </button>
+      </div>
+      <div v-else class="pf-add-row">
+        <input v-model="newAssetCode" type="text" maxlength="8" placeholder="代码" class="add-code" @keyup.enter="confirmAddAsset" @keyup.escape="addingAsset = false" />
+        <input v-model="newAssetWt" type="number" min="1" max="100" placeholder="权重%" class="add-wt" @keyup.enter="confirmAddAsset" @keyup.escape="addingAsset = false" />
+        <button type="button" class="btn-link btn-link-sm" @click="confirmAddAsset">保存</button>
+        <button type="button" class="btn-link btn-link-sm" @click="addingAsset = false">取消</button>
+      </div>
     </div>
   </section>
 </template>
@@ -207,4 +228,8 @@ const changeText = computed(() => {
   padding: 0 4px;
   font-size: 12px;
 }
+
+.pf-add-row { display: flex; align-items: center; gap: 4px; padding: 6px 0; }
+.add-code { width: 60px; min-height: 24px; padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 11px; }
+.add-wt { width: 42px; min-height: 24px; padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 11px; }
 </style>
