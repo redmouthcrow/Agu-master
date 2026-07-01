@@ -929,7 +929,7 @@ export function useAppState() {
     const aligned = getAlignedTimeLabel(trading, new Date(), config.value.refreshFrequency);
 
     try {
-      const codes = cards.value.map((c) => c.stock.code);
+      const codes = cards.value.filter((c) => !c.stock.trackingOnly).map((c) => c.stock.code);
       const quotes = await fetchQuotesWithFallback(codes);
 
       const aiState = { stopAi: false };
@@ -970,8 +970,8 @@ export function useAppState() {
         while (nextIndex < cards.value.length) {
           const card = cards.value[nextIndex];
           nextIndex += 1;
-          // Skip cards with refresh mode set to 'off'.
-          if (card.stock.refreshMode === 'off') continue;
+          // Skip cards with refresh mode set to 'off' or tracking-only.
+          if (card.stock.refreshMode === 'off' || card.stock.trackingOnly) continue;
           await refreshOne(card);
         }
       }
