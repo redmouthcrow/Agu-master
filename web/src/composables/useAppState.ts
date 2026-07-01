@@ -1412,16 +1412,23 @@ export function useAppState() {
     refreshingTracking = true;
     try {
       const quotes = await fetchQuotesWithFallback(codes);
+      let updated = 0;
       for (const card of cards.value) {
         const snap = quotes.get(card.stock.code);
         if (snap) {
           card.snapshot = { ...snap, instrumentType: card.stock.instrumentType };
           if (card.stock.name !== snap.name) card.stock.name = snap.name;
           if (snap.price != null) recordPrice(card.stock.code, snap.price);
+          updated++;
         }
       }
-    } catch { /* silent */ }
-    finally { refreshingTracking = false; }
+      // Force reactivity: replace the cards array reference to trigger re-render.
+      if (updated > 0) cards.value = [...cards.value];
+      broadcastLiveSync();
+    } catch { /* retry next click */ }
+    finally {
+      refreshingTracking = false;
+    }
   }
 
   /** Compute weighted change% for a portfolio. Returns null if no valid data. */
