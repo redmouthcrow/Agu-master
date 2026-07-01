@@ -4,6 +4,17 @@
 
 ---
 
+## 2.8.1 - 2026-07-01
+
+### 变更类型：修复（修订版本）
+
+### 修复
+- **组合板块涨跌不生效**：refreshTrackingQuotes 遍历 `codes`（仅持仓）未遍历 `allCodes`（含板块 ETF），板块行情数据未写入 trackingSnapshots
+- **全局刷新误计追踪证券**：runRefresh 排除 trackingOnly（不再污染行情未变计数）
+- **板块切换无响应**：setPortfolioSector 强制数组替换触发响应式 + 切换后自动刷新
+
+---
+
 ## 2.8.0 - 2026-07-01
 
 ### 变更类型：新增（次版本）

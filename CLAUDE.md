@@ -10,11 +10,14 @@
 | 新增功能 / PRD 变更（如新增字段、新增输出路径） | 第二位 +1 | 2.7.0 |
 | Bug 修复 / UI 微调 / 无新增功能的改动 | 第三位 +1 | 2.6.1 |
 
-**规则：提交 Bug 修复时，必须同时将版本号第三位 +1，并更新：**
-- `desktop/package.json` + `package-lock.json`
-- `web/package.json` + `package-lock.json`
-- `Product-Spec.md` 文档版本
-- `Product-Spec-CHANGELOG.md` 新增修复条目
+**规则：每次代码调整后，必须同步更新以下文档和版本号：**
+- `desktop/package.json` + `package-lock.json`（版本号）
+- `web/package.json` + `package-lock.json`（版本号）
+- `web/src/constants/app.ts`（APP_VERSION）
+- `Product-Spec.md`（文档版本 + 功能状态）
+- `Product-Spec-CHANGELOG.md`（变更条目）
+- `README.md`（用户可见功能说明）
+- Bug 修复 → 第三位 +1；新增功能 → 第二位 +1
 
 ## Skill routing
 
