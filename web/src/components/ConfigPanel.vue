@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import type { AppConfig, RefreshFrequency, WatchlistItem } from '../types';
 import { maskApiKey } from '../utils/display';
 import { parsePositionInputs } from '../utils/position';
+import { normalizeWatchlistSymbol } from '../utils/stockCode';
 import {
   MAX_WIDGET_PINNED,
   MIN_WIDGET_PINNED,
@@ -41,11 +42,13 @@ const pfCode = ref('');
 const pfWeight = ref('');
 
 function addPfAsset() {
-  const code = pfCode.value.trim();
+  const raw = pfCode.value.trim();
   const w = Number(pfWeight.value);
-  if (!code || isNaN(w) || w <= 0 || w > 100 || !selectedPfId.value) return;
-  emit('removeAssignment', code, selectedPfId.value); // clear old weight first
-  // add via save (upsert handled by useAppState)
+  if (!raw || isNaN(w) || w <= 0 || w > 100 || !selectedPfId.value) return;
+  const parsed = normalizeWatchlistSymbol(raw);
+  if (!parsed) return;
+  const code = parsed.code;
+  emit('removeAssignment', code, selectedPfId.value);
   emit('save', {
     portfolioAssignments: [
       ...(props.config.portfolioAssignments ?? []).filter(

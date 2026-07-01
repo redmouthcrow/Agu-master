@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import type { Portfolio, PortfolioAssignment } from '../types';
+import { normalizeWatchlistSymbol } from '../utils/stockCode';
 
 const props = defineProps<{
   portfolio: Portfolio;
@@ -24,6 +25,7 @@ const editWtValue = ref('');
 const addingAsset = ref(false);
 const newAssetCode = ref('');
 const newAssetWt = ref('');
+const loading = ref(false);
 
 function startEditWeight(code: string, currentWt: number) {
   editingWeight.value = code;
@@ -38,11 +40,19 @@ function confirmWeight(code: string) {
   editingWeight.value = null;
 }
 
+function doRefresh() {
+  loading.value = true;
+  emit('refresh');
+  setTimeout(() => (loading.value = false), 5000);
+}
+
 function confirmAddAsset() {
-  const code = newAssetCode.value.trim();
+  const raw = newAssetCode.value.trim();
   const w = Number(newAssetWt.value);
-  if (!code || isNaN(w) || w <= 0 || w > 100) return;
-  emit('addAsset', code, w);
+  if (!raw || isNaN(w) || w <= 0 || w > 100) return;
+  const parsed = normalizeWatchlistSymbol(raw);
+  if (!parsed) return;
+  emit('addAsset', parsed.code, w);
   newAssetCode.value = '';
   newAssetWt.value = '';
   addingAsset.value = false;
@@ -78,7 +88,7 @@ const changeText = computed(() => {
       </button>
       <span class="pf-name">{{ portfolio.name }}</span>
       <span class="pf-change" :class="changeClass">{{ changeText }}</span>
-      <button type="button" class="btn-refresh" title="刷新组合行情" @click="emit('refresh')">↻</button>
+      <button type="button" class="btn-refresh" :disabled="loading" :title="loading ? '刷新中…' : '刷新组合行情'" @click="doRefresh">{{ loading ? '⌛' : '↻' }}</button>
       <button type="button" class="btn-remove" aria-label="删除组合" @click="emit('remove')">×</button>
     </header>
 
