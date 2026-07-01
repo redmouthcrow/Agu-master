@@ -4,6 +4,7 @@ import ConfigPanel from './components/ConfigPanel.vue';
 import Sidebar from './components/Sidebar.vue';
 import StockCard from './components/StockCard.vue';
 import PortfolioCard from './components/PortfolioCard.vue';
+import AboutModal from './components/AboutModal.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import { useAppState } from './composables/useAppState';
 import { DEFAULT_GROUP_ID } from './types';
@@ -12,6 +13,7 @@ import { applyDocumentTitle, useI18n } from './i18n';
 const { t } = useI18n();
 const stockInput = ref('');
 const sidebarCollapsed = ref(false);
+const aboutOpen = ref(false);
 
 const {
   cards,
@@ -148,6 +150,7 @@ onMounted(() => {
       @remove-portfolio="removePortfolio"
       @move-portfolio-up="movePortfolioUp"
       @move-portfolio-down="movePortfolioDown"
+      @open-about="aboutOpen = true"
     />
 
     <div class="app-main">
@@ -243,6 +246,7 @@ onMounted(() => {
   </div>
 
   <ToastContainer :toasts="toasts" />
+  <AboutModal v-if="aboutOpen" @close="aboutOpen = false" />
 </template>
 
 <style>

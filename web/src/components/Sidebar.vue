@@ -25,6 +25,7 @@ const emit = defineEmits<{
   moveGroupDown: [id: string];
   movePortfolioUp: [id: string];
   movePortfolioDown: [id: string];
+  openAbout: [];
 }>();
 
 const { t } = useI18n();
@@ -134,6 +135,9 @@ function cancelPfRename() { editingPfId.value = null; editPfName.value = ''; }
             </template>
           </div>
         </div>
+        <div class="sidebar-footer">
+          <button class="btn-link btn-link-sm" @click="emit('openAbout')">关于 AguMaster</button>
+        </div>
       </div>
     </template>
   </aside>
@@ -164,4 +168,5 @@ function cancelPfRename() { editingPfId.value = null; editPfName.value = ''; }
 .stats-footer { padding: 12px; border-top: 1px solid var(--border); margin-top: 8px; }
 .stat-text { color: var(--text-muted); font-size: 12px; }
 .divider { height: 1px; background: var(--border); margin: 8px 12px; }
+.sidebar-footer { padding: 8px 12px; border-top: 1px solid var(--border); margin-top: auto; }
 </style>
