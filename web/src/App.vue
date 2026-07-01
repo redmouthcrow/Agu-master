@@ -51,6 +51,7 @@ const {
   computePortfolioChange,
   getTrackingCodes,
   refreshTrackingQuotes,
+  trackingSnapshots,
   upsertAssignment,
   removeAssignment,
   moveGroupUp,
@@ -90,6 +91,10 @@ const groupCounts = computed(() => {
           changePct: card.snapshot?.changePct ?? null,
         };
       }
+    }
+    // Also include tracking-only codes without diagnosis cards.
+    for (const [code, snap] of trackingSnapshots.value) {
+      if (!map[code]) map[code] = { name: snap.name, changePct: snap.changePct };
     }
     return map;
   });

@@ -103,6 +103,7 @@ const changeText = computed(() => {
         >
           <span class="pf-code">{{ a.code.replace(/^(sh|sz|bj)/i, '') }}</span>
           <span class="pf-name-split">{{ props.holdings[a.code]?.name ?? a.code }}</span>
+          <button class="btn-edit-wt" @click.stop="startEditWeight(a.code, a.weight)" title="编辑权重">✎</button>
           <span class="pf-wt" @click.stop="startEditWeight(a.code, a.weight)">
             <template v-if="editingWeight === a.code">
               <input
@@ -247,4 +248,6 @@ const changeText = computed(() => {
 .add-wt { width: 100px; min-height: 26px; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
 .pf-remove { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; }
 .pf-remove:hover { color: var(--up); }
+.btn-edit-wt { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 10px; padding: 0 2px; }
+.btn-edit-wt:hover { color: var(--text); }
 </style>

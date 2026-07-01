@@ -1407,32 +1407,34 @@ export function useAppState() {
   }
 
   let refreshingTracking = false;
+  const trackingSnapshots = ref<Map<string, { name: string; price: number | null; changePct: number | null }>>(new Map());
 
-  async function refreshTrackingQuotes(): Promise<void> {
-    if (refreshingTracking) return;
-    const codes = getTrackingCodes();
-    if (codes.length === 0) return;
-    refreshingTracking = true;
-    try {
-      const quotes = await fetchQuotesWithFallback(codes);
-      let updated = 0;
-      for (const card of cards.value) {
-        const snap = quotes.get(card.stock.code);
-        if (snap) {
-          card.snapshot = { ...snap, instrumentType: card.stock.instrumentType };
-          if (card.stock.name !== snap.name) card.stock.name = snap.name;
-          if (snap.price != null) recordPrice(card.stock.code, snap.price);
-          updated++;
-        }
-      }
-      // Force reactivity: replace the cards array reference to trigger re-render.
-      if (updated > 0) cards.value = [...cards.value];
-      broadcastLiveSync();
-    } catch { /* retry next click */ }
-    finally {
-      refreshingTracking = false;
-    }
-  }
+	  async function refreshTrackingQuotes(): Promise<void> {
+	    if (refreshingTracking) return;
+	    const codes = getTrackingCodes();
+	    if (codes.length === 0) return;
+	    refreshingTracking = true;
+	    try {
+	      const quotes = await fetchQuotesWithFallback(codes);
+	      const next = new Map(trackingSnapshots.value);
+	      for (const card of cards.value) {
+	        const snap = quotes.get(card.stock.code);
+	        if (snap) {
+	          card.snapshot = { ...snap, instrumentType: card.stock.instrumentType };
+	          if (card.stock.name !== snap.name) card.stock.name = snap.name;
+	          if (snap.price != null) recordPrice(card.stock.code, snap.price);
+	        }
+	      }
+	      for (const code of codes) {
+	        const snap = quotes.get(code);
+	        if (snap) next.set(code, { name: snap.name ?? code, price: snap.price, changePct: snap.changePct });
+	      }
+	      trackingSnapshots.value = next;
+	      cards.value = [...cards.value];
+	      broadcastLiveSync();
+	    } catch { /* retry next click */ }
+	    finally { refreshingTracking = false; }
+	  }
 
   /** Compute weighted change% for a portfolio. Returns null if no valid data. */
   function computePortfolioChange(portfolioId: string): number | null {
@@ -1548,6 +1550,7 @@ export function useAppState() {
     getTrackingCodes,
     computePortfolioChange,
     refreshTrackingQuotes,
+    trackingSnapshots,
     moveGroupUp,
     moveGroupDown,
     movePortfolioUp,
