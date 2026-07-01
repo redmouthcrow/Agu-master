@@ -121,7 +121,7 @@ async function fetchTencent(codes: string[]): Promise<Map<string, QuoteSnapshot>
   return result;
 }
 
-async function fetchSina(codes: string[]): Promise<Map<string, QuoteSnapshot>> {
+export async function fetchSina(codes: string[]): Promise<Map<string, QuoteSnapshot>> {
   const result = new Map<string, QuoteSnapshot>();
   if (codes.length === 0) {
     return result;

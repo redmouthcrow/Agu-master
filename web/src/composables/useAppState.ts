@@ -24,6 +24,7 @@ import {
   isInAutoTradingWindow,
 } from '../utils/time';
 import { fetchQuotesWithFallback } from '../services/quoteJsonp';
+import { fetchSina } from '../services/quoteJsonp';
 import { LlmAuthError, runDiagnosis, sleep } from '../services/llmDiagnosis';
 import {
   getCalendarFailed,
@@ -1431,8 +1432,16 @@ export function useAppState() {
 	    if (allCodes.length === 0) return;
 	    refreshingTracking = true;
 	    try {
-	      const quotes = await fetchQuotesWithFallback(allCodes);
-	      const next = new Map(trackingSnapshots.value);
+      const quotes = await fetchQuotesWithFallback(allCodes);
+      // Sector ETF codes may not be supported by Tencent — try Sina as fallback.
+      const missingSector = sectorCodes.filter((c) => !quotes.get(c));
+      if (missingSector.length > 0) {
+        try {
+          const sina = await fetchSina(missingSector);
+          sina.forEach((v, k) => quotes.set(k, v));
+        } catch { /* ignore */ }
+      }
+      const next = new Map(trackingSnapshots.value);
 	      for (const card of cards.value) {
 	        const snap = quotes.get(card.stock.code);
 	        if (snap) {
