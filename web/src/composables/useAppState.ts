@@ -1424,6 +1424,21 @@ export function useAppState() {
   let refreshingTracking = false;
   const trackingSnapshots = ref<Map<string, { name: string; price: number | null; changePct: number | null }>>(new Map());
 
+  /** Simple sector fetch — bypasses the tracking guard. */
+  async function refreshSectorQuotes(): Promise<void> {
+    const sectorCodes = (config.value.portfolios ?? []).map((p) => p.sectorCode).filter(Boolean) as string[];
+    if (sectorCodes.length === 0) return;
+    try {
+      const sina = await fetchSina(sectorCodes);
+      const next = new Map(trackingSnapshots.value);
+      for (const code of sectorCodes) {
+        const snap = sina.get(code);
+        if (snap) next.set(code, { name: snap.name ?? code, price: snap.price, changePct: snap.changePct });
+      }
+      trackingSnapshots.value = next;
+    } catch { /* ignore */ }
+  }
+
 	  async function refreshTrackingQuotes(): Promise<void> {
 	    if (refreshingTracking) return;
 	    const codes = getTrackingCodes();
@@ -1595,6 +1610,7 @@ export function useAppState() {
     getTrackingCodes,
     computePortfolioChange,
     refreshTrackingQuotes,
+    refreshSectorQuotes,
     trackingSnapshots,
     moveGroupUp,
     moveGroupDown,
