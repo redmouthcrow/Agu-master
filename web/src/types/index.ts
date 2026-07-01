@@ -3,7 +3,7 @@ export const MAX_KEY_LEVELS = 4;
 export const MAX_OVERCLOCK = 5;
 
 export type InstrumentType = 'stock' | 'fund_etf';
-export type Market = 'sh' | 'sz' | 'bj';
+export type Market = 'sh' | 'sz' | 'bj' | 'hk';
 export type RefreshFrequency = 5 | 15 | 30 | 60;
 export type RefreshMode = 'off' | 'normal' | 'overclock';
 export type KeyLevelType = 'support' | 'resistance' | 'custom';

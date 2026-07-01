@@ -7,6 +7,8 @@ export interface ParsedSymbol {
 }
 
 function inferMarket(num: string): Market | null {
+  // HK: 5-digit codes
+  if (/^\d{5}$/.test(num)) return 'hk';
   if (num.startsWith('6') || num.startsWith('5')) {
     return 'sh';
   }
@@ -20,7 +22,9 @@ function inferMarket(num: string): Market | null {
 }
 
 export function inferInstrumentType(code: string): InstrumentType {
-  const num = code.replace(/^(sh|sz|bj)/i, '');
+  const num = code.replace(/^(sh|sz|bj|hk)/i, '');
+  // HK: all stocks
+  if (/^\d{5}$/.test(num)) return 'stock';
   if (/^(51|56|58)\d{4}$/.test(num)) {
     return 'fund_etf';
   }
@@ -32,7 +36,7 @@ export function inferInstrumentType(code: string): InstrumentType {
 
 export function normalizeWatchlistSymbol(input: string): ParsedSymbol | null {
   const raw = input.trim().toLowerCase().replace(/\s/g, '');
-  const match = raw.match(/^(?:(sh|sz|bj))?(\d{6})$/);
+  const match = raw.match(/^(?:(sh|sz|bj|hk))?(\d{5,6})$/);
   if (!match) {
     return null;
   }

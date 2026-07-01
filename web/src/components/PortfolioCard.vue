@@ -114,8 +114,8 @@ const changeText = computed(() => {
                 class="wt-input"
                 @keyup.enter="confirmWeight(a.code)"
                 @keyup.escape="editingWeight = null"
-                @blur="confirmWeight(a.code)"
               />
+              <button class="btn-link btn-link-sm" @click.stop="confirmWeight(a.code)">保存</button>
             </template>
             <template v-else>{{ a.weight }}%</template>
           </span>
@@ -248,6 +248,6 @@ const changeText = computed(() => {
 .add-wt { width: 100px; min-height: 26px; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
 .pf-remove { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; }
 .pf-remove:hover { color: var(--up); }
-.btn-edit-wt { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 10px; padding: 0 2px; }
+.btn-edit-wt { background: none; border: none; color: #faad14; cursor: pointer; font-size: 11px; padding: 0 2px; font-weight: 600; }
 .btn-edit-wt:hover { color: var(--text); }
 </style>

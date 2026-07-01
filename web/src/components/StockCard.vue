@@ -118,7 +118,7 @@ const levelLabel = (level: { type: string; label: string }) => {
 };
 
 function isCodeLikeName(name: string, code: string): boolean {
-  const normalized = code.replace(/^(sh|sz|bj)/i, '');
+  const normalized = code.replace(/^(sh|sz|bj|hk)/i, '');
   return name === code || name === normalized || /^\d{6}$/.test(name);
 }
 
