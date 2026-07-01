@@ -969,6 +969,8 @@ export function useAppState() {
         while (nextIndex < cards.value.length) {
           const card = cards.value[nextIndex];
           nextIndex += 1;
+          // Skip cards with refresh mode set to 'off'.
+          if (card.stock.refreshMode === 'off') continue;
           await refreshOne(card);
         }
       }
