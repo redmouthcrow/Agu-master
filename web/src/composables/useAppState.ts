@@ -1424,21 +1424,6 @@ export function useAppState() {
   let refreshingTracking = false;
   const trackingSnapshots = ref<Map<string, { name: string; price: number | null; changePct: number | null }>>(new Map());
 
-  /** Simple sector fetch — bypasses the tracking guard. */
-  async function refreshSectorQuotes(): Promise<void> {
-    const sectorCodes = (config.value.portfolios ?? []).map((p) => p.sectorCode).filter(Boolean) as string[];
-    if (sectorCodes.length === 0) return;
-    try {
-      const sina = await fetchSina(sectorCodes);
-      const next = new Map(trackingSnapshots.value);
-      for (const code of sectorCodes) {
-        const snap = sina.get(code);
-        if (snap) next.set(code, { name: snap.name ?? code, price: snap.price, changePct: snap.changePct });
-      }
-      trackingSnapshots.value = next;
-    } catch { /* ignore */ }
-  }
-
 	  async function refreshTrackingQuotes(): Promise<void> {
 	    if (refreshingTracking) return;
 	    const codes = getTrackingCodes();
@@ -1465,15 +1450,16 @@ export function useAppState() {
 	          if (snap.price != null) recordPrice(card.stock.code, snap.price);
 	        }
 	      }
-	      for (const code of codes) {
-	        const snap = quotes.get(code);
-	        if (snap) next.set(code, { name: snap.name ?? code, price: snap.price, changePct: snap.changePct });
-	      }
-	      trackingSnapshots.value = next;
-	      cards.value = [...cards.value];
-	      broadcastLiveSync();
-	    } catch { /* retry next click */ }
-	    finally { refreshingTracking = false; }
+      for (const code of allCodes) {
+        const snap = quotes.get(code);
+        if (snap) next.set(code, { name: snap.name ?? code, price: snap.price, changePct: snap.changePct });
+      }
+      trackingSnapshots.value = next;
+      cards.value = [...cards.value];
+      broadcastLiveSync();
+      console.log('[refreshTracking] codes:', allCodes, 'cached:', [...next.keys()], 'snapshots:', [...next.entries()].map(([k,v]) => `${k}:${v.changePct}%`));
+    } catch { /* retry next click */ }
+    finally { refreshingTracking = false; }
 	  }
 
   /** Compute estimated change% for a portfolio. Uses sector index to compensate unconfigured weight. */
@@ -1496,8 +1482,12 @@ export function useAppState() {
     if (totalWeight === 0) {
       if (portfolio?.sectorCode) {
         const snap = trackingSnapshots.value.get(portfolio.sectorCode);
+        console.log('[computeChange] portfolio=%s sector=%s snap=%o result=%s',
+          portfolio.name, portfolio.sectorCode, snap,
+          snap?.changePct != null ? (snap.changePct).toFixed(2) + '%' : 'null');
         return snap?.changePct != null ? Math.round(snap.changePct * 100) / 100 : null;
       }
+      console.log('[computeChange] portfolio=%s no-sector no-assets → null', portfolio?.name);
       return null;
     }
 
@@ -1509,9 +1499,13 @@ export function useAppState() {
       if (sectorSnap?.changePct != null) {
         const remainingRatio = (100 - totalWeight) / 100;
         const compensated = direct + sectorSnap.changePct * remainingRatio;
+        console.log('[computeChange] portfolio=%s direct=%.2f%% sector=%s(%.2f%%) remain=%.0f%% result=%.2f%%',
+          portfolio.name, direct, portfolio.sectorCode, sectorSnap.changePct,
+          (100 - totalWeight), compensated);
         return Math.round(compensated * 100) / 100;
       }
     }
+    console.log('[computeChange] portfolio=%s direct=%.2f%% (no sector comp)', portfolio?.name, direct);
     return direct;
   }
 
@@ -1610,7 +1604,6 @@ export function useAppState() {
     getTrackingCodes,
     computePortfolioChange,
     refreshTrackingQuotes,
-    refreshSectorQuotes,
     trackingSnapshots,
     moveGroupUp,
     moveGroupDown,

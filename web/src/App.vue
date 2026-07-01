@@ -54,7 +54,6 @@ const {
   computePortfolioChange,
   getTrackingCodes,
   refreshTrackingQuotes,
-  refreshSectorQuotes,
   trackingSnapshots,
   upsertAssignment,
   removeAssignment,
@@ -191,7 +190,7 @@ onMounted(() => {
           :cards="cards"
           @refresh="refreshTrackingQuotes"
           @remove="removePortfolio(p.id)"
-          @set-sector="(sc) => { setPortfolioSector(p.id, sc); refreshSectorQuotes(); }"
+          @set-sector="(sc) => { setPortfolioSector(p.id, sc); refreshTrackingQuotes(); }"
           @update-weight="(code, w) => upsertAssignment(code, p.id, w)"
           @remove-asset="(code) => removeAssignment(code, p.id)"
           @add-asset="(code, w) => { addSymbol(code, undefined, undefined); upsertAssignment(code, p.id, w); const item = config.watchlist.find(x => x.code === code); if (item) item.trackingOnly = true; }"
