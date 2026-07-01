@@ -145,7 +145,7 @@ onMounted(() => {
       @remove-group="removeGroup"
       @move-group-up="moveGroupUp"
       @move-group-down="moveGroupDown"
-      @add-portfolio="addPortfolio"
+      @add-portfolio="(name, sc) => addPortfolio(name, sc)"
       @rename-portfolio="renamePortfolio"
       @remove-portfolio="removePortfolio"
       @move-portfolio-up="movePortfolioUp"

@@ -1299,13 +1299,13 @@ export function useAppState() {
 
   // --- Portfolio functions (v2.8) ---
 
-  function addPortfolio(name: string): boolean {
+  function addPortfolio(name: string, sectorCode?: string): boolean {
     const trimmed = name.trim();
     if (!trimmed || trimmed.length > 10) return false;
     const portfolios = config.value.portfolios ?? [];
     if (portfolios.some((p) => p.name === trimmed)) return false;
     const maxPfOrder = portfolios.reduce((m, p) => Math.max(m, p.order ?? 0), -1);
-    portfolios.push({ id: `pf_${Date.now()}`, name: trimmed, order: maxPfOrder + 1, createdAt: new Date().toISOString() });
+    portfolios.push({ id: `pf_${Date.now()}`, name: trimmed, order: maxPfOrder + 1, sectorCode: sectorCode || undefined, createdAt: new Date().toISOString() });
     config.value.portfolios = portfolios;
     persistConfig();
     broadcastLiveSync();
@@ -1416,10 +1416,12 @@ export function useAppState() {
 	  async function refreshTrackingQuotes(): Promise<void> {
 	    if (refreshingTracking) return;
 	    const codes = getTrackingCodes();
-	    if (codes.length === 0) return;
+	    const sectorCodes = (config.value.portfolios ?? []).map((p) => p.sectorCode).filter(Boolean) as string[];
+	    const allCodes = [...new Set([...codes, ...sectorCodes])];
+	    if (allCodes.length === 0) return;
 	    refreshingTracking = true;
 	    try {
-	      const quotes = await fetchQuotesWithFallback(codes);
+	      const quotes = await fetchQuotesWithFallback(allCodes);
 	      const next = new Map(trackingSnapshots.value);
 	      for (const card of cards.value) {
 	        const snap = quotes.get(card.stock.code);
@@ -1440,7 +1442,7 @@ export function useAppState() {
 	    finally { refreshingTracking = false; }
 	  }
 
-  /** Compute weighted change% for a portfolio. Returns null if no valid data. */
+  /** Compute estimated change% for a portfolio. Uses sector index to compensate unconfigured weight. */
   function computePortfolioChange(portfolioId: string): number | null {
     const assignments = (config.value.portfolioAssignments ?? []).filter(
       (a) => a.portfolioId === portfolioId,
@@ -1450,14 +1452,25 @@ export function useAppState() {
     let totalWeight = 0;
     let weightedSum = 0;
     for (const a of assignments) {
-      const card = cards.value.find((c) => c.stock.code === a.code);
-      const snap = card?.snapshot;
+      const snap = trackingSnapshots.value.get(a.code) ?? cards.value.find((c) => c.stock.code === a.code)?.snapshot;
       if (!snap || snap.changePct == null) continue;
       weightedSum += a.weight * snap.changePct;
       totalWeight += a.weight;
     }
     if (totalWeight === 0) return null;
-    return Math.round((weightedSum / totalWeight) * 100) / 100;
+    const direct = Math.round((weightedSum / totalWeight) * 100) / 100;
+
+    // Sector compensation: remaining weight × sector change%.
+    const portfolio = (config.value.portfolios ?? []).find((p) => p.id === portfolioId);
+    if (portfolio?.sectorCode && totalWeight < 100) {
+      const sectorSnap = trackingSnapshots.value.get(portfolio.sectorCode);
+      if (sectorSnap?.changePct != null) {
+        const remainingRatio = (100 - totalWeight) / 100;
+        const compensated = direct + sectorSnap.changePct * remainingRatio;
+        return Math.round(compensated * 100) / 100;
+      }
+    }
+    return direct;
   }
 
   return {

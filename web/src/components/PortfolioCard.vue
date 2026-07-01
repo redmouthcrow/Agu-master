@@ -89,6 +89,7 @@ const changeText = computed(() => {
         {{ expanded ? '▾' : '▸' }}
       </button>
       <span class="pf-name">{{ portfolio.name }}</span>
+      <span v-if="portfolio.sectorCode" class="pf-sector">{{ portfolio.sectorCode.replace(/^sh|sz|bj|hk/i, '') }}</span>
       <span class="pf-change" :class="changeClass">{{ changeText }}</span>
       <button type="button" class="btn-refresh" :disabled="loading" :title="loading ? '刷新中…' : '刷新组合行情'" @click="doRefresh">{{ loading ? '⌛' : '↻' }}</button>
       <button type="button" class="btn-remove" aria-label="删除组合" @click="emit('remove')">×</button>
@@ -168,6 +169,7 @@ const changeText = computed(() => {
   font-size: 14px;
   flex: 1;
 }
+.pf-sector { font-size: 10px; color: var(--text-dim); background: var(--bg); padding: 1px 5px; border-radius: 3px; }
 
 .pf-change {
   font-size: 14px;

@@ -56,6 +56,8 @@ export interface Portfolio {
   name: string;
   order: number;
   createdAt: string;
+  /** v2.9: sector ETF code for remainder compensation */
+  sectorCode?: string;
 }
 
 /** Maps a security to a portfolio with a weight percentage (0-100). */

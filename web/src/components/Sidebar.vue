@@ -3,6 +3,25 @@ import { ref, computed } from 'vue';
 import type { Portfolio, UserGroup } from '../types';
 import { useI18n } from '../i18n';
 
+const SECTORS = [
+  { code: '', name: '不选' },
+  { code: 'sh512480', name: '半导体' },
+  { code: 'sh512690', name: '白酒' },
+  { code: 'sh516160', name: '新能源' },
+  { code: 'sh512010', name: '医药' },
+  { code: 'sh512800', name: '银行' },
+  { code: 'sh512660', name: '军工' },
+  { code: 'sh515000', name: '科技' },
+  { code: 'sh512880', name: '证券' },
+  { code: 'sh512200', name: '地产' },
+  { code: 'sh515220', name: '煤炭' },
+  { code: 'sh512400', name: '有色' },
+  { code: 'sh516880', name: '光伏' },
+  { code: 'sh516110', name: '汽车' },
+  { code: 'sh515070', name: '人工智能' },
+  { code: 'sh512600', name: '消费' },
+];
+
 const props = defineProps<{
   groups: UserGroup[];
   watchlistCount: number;
@@ -18,7 +37,7 @@ const emit = defineEmits<{
   renameGroup: [id: string, name: string];
   removeGroup: [id: string];
   closeSidebar: [];
-  addPortfolio: [name: string];
+  addPortfolio: [name: string, sectorCode: string];
   renamePortfolio: [id: string, name: string];
   removePortfolio: [id: string];
   moveGroupUp: [id: string];
@@ -34,6 +53,7 @@ const addingGroup = ref(false);
 const newGroupName = ref('');
 const addingPortfolio = ref(false);
 const newPortfolioName = ref('');
+const newPortfolioSector = ref('');
 
 const editingId = ref<string | null>(null);
 const editName = ref('');
@@ -60,8 +80,8 @@ function cancelRename() { editingId.value = null; editName.value = ''; }
 function confirmAddPortfolio() {
   const t = newPortfolioName.value.trim();
   if (!t) { addingPortfolio.value = false; return; }
-  emit('addPortfolio', t);
-  newPortfolioName.value = ''; addingPortfolio.value = false;
+  emit('addPortfolio', t, newPortfolioSector.value || '');
+  newPortfolioName.value = ''; newPortfolioSector.value = ''; addingPortfolio.value = false;
 }
 function startPfRename(p: Portfolio) { editingPfId.value = p.id; editPfName.value = p.name; }
 function confirmPfRename() {
@@ -114,7 +134,10 @@ function cancelPfRename() { editingPfId.value = null; editPfName.value = ''; }
 
         <div class="sidebar-add"><button type="button" class="btn-sidebar-add" @click="addingPortfolio = true">+ 新建组合</button></div>
         <div v-if="addingPortfolio" class="edit-row">
-          <input v-model="newPortfolioName" type="text" maxlength="10" class="edit-input" @keyup.enter="confirmAddPortfolio" @keyup.escape="addingPortfolio = false" />
+          <input v-model="newPortfolioName" type="text" maxlength="10" class="edit-input" placeholder="组合名" @keyup.enter="confirmAddPortfolio" @keyup.escape="addingPortfolio = false" />
+          <select v-model="newPortfolioSector" class="sector-select">
+            <option v-for="s in SECTORS" :key="s.code" :value="s.code">{{ s.name }}</option>
+          </select>
           <button class="btn-link btn-link-sm" @click="confirmAddPortfolio">{{ t('common.save') }}</button>
           <button class="btn-link btn-link-sm" @click="addingPortfolio = false">{{ t('common.cancel') }}</button>
         </div>
@@ -169,4 +192,5 @@ function cancelPfRename() { editingPfId.value = null; editPfName.value = ''; }
 .stat-text { color: var(--text-muted); font-size: 12px; }
 .divider { height: 1px; background: var(--border); margin: 8px 12px; }
 .sidebar-footer { padding: 8px 12px; border-top: 1px solid var(--border); margin-top: auto; }
+.sector-select { min-height: 28px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 11px; max-width: 72px; }
 </style>
