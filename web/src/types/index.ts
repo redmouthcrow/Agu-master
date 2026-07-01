@@ -54,6 +54,7 @@ export interface UserGroup {
 export interface Portfolio {
   id: string;
   name: string;
+  order: number;
   createdAt: string;
 }
 

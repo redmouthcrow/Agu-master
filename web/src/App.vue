@@ -51,6 +51,10 @@ const {
   computePortfolioChange,
   getTrackingCodes,
   upsertAssignment,
+  moveGroupUp,
+  moveGroupDown,
+  movePortfolioUp,
+  movePortfolioDown,
 } = useAppState();
 
 const groups = computed(() => config.value.groups ?? []);
@@ -130,9 +134,13 @@ onMounted(() => {
       @add-group="addGroup"
       @rename-group="renameGroup"
       @remove-group="removeGroup"
+      @move-group-up="moveGroupUp"
+      @move-group-down="moveGroupDown"
       @add-portfolio="addPortfolio"
       @rename-portfolio="renamePortfolio"
       @remove-portfolio="removePortfolio"
+      @move-portfolio-up="movePortfolioUp"
+      @move-portfolio-down="movePortfolioDown"
     />
 
     <div class="app-main">
@@ -170,6 +178,7 @@ onMounted(() => {
           @refresh="runRefresh(true)"
           @remove="removePortfolio(p.id)"
           @update-weight="(code, w) => upsertAssignment(code, p.id, w)"
+          @add-asset="configOpen = true"
         />
 
         <div

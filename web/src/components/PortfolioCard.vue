@@ -66,7 +66,7 @@ const changeText = computed(() => {
       <span class="pf-name">{{ portfolio.name }}</span>
       <span class="pf-change" :class="changeClass">{{ changeText }}</span>
       <button type="button" class="btn-refresh" title="刷新组合行情" @click="emit('refresh')">↻</button>
-      <button type="button" class="btn-link btn-link-sm" @click="emit('remove')">×</button>
+      <button type="button" class="btn-remove" aria-label="删除组合" @click="emit('remove')">×</button>
     </header>
 
     <div v-if="expanded" class="pf-body">

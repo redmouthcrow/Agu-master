@@ -21,6 +21,10 @@ const emit = defineEmits<{
   addPortfolio: [name: string];
   renamePortfolio: [id: string, name: string];
   removePortfolio: [id: string];
+  moveGroupUp: [id: string];
+  moveGroupDown: [id: string];
+  movePortfolioUp: [id: string];
+  movePortfolioDown: [id: string];
 }>();
 
 const { t } = useI18n();
@@ -36,6 +40,7 @@ const editingPfId = ref<string | null>(null);
 const editPfName = ref('');
 
 const sortedGroups = computed(() => [...props.groups].sort((a, b) => a.order - b.order));
+const sortedPortfolios = computed(() => [...props.portfolios].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
 
 function confirmAddGroup() {
   const trimmed = newGroupName.value.trim();
@@ -94,6 +99,8 @@ function cancelPfRename() { editingPfId.value = null; editPfName.value = ''; }
             </template>
             <template v-else>
               <span class="item-name">{{ group.name }}<span class="item-count">({{ props.groupCounts[group.id] ?? 0 }})</span></span>
+              <button class="btn-arrow" @click="emit('moveGroupUp', group.id)" title="上移">↑</button>
+              <button class="btn-arrow" @click="emit('moveGroupDown', group.id)" title="下移">↓</button>
               <button class="btn-menu" @click="startRename(group)">{{ t('sidebar.renameGroup') }}</button>
               <button class="btn-menu btn-menu-danger" @click="emit('removeGroup', group.id)">{{ t('sidebar.deleteGroup') }}</button>
             </template>
@@ -112,7 +119,7 @@ function cancelPfRename() { editingPfId.value = null; editPfName.value = ''; }
         </div>
 
         <div class="item-list">
-          <div v-for="p in portfolios" :key="p.id" class="item-row">
+          <div v-for="p in sortedPortfolios" :key="p.id" class="item-row">
             <template v-if="editingPfId === p.id">
               <input v-model="editPfName" type="text" maxlength="10" class="edit-input" @keyup.enter="confirmPfRename" @keyup.escape="cancelPfRename" />
               <button class="btn-link btn-link-sm" @click="confirmPfRename">{{ t('common.save') }}</button>
@@ -120,6 +127,8 @@ function cancelPfRename() { editingPfId.value = null; editPfName.value = ''; }
             </template>
             <template v-else>
               <span class="item-name">📊 {{ p.name }}</span>
+              <button class="btn-arrow" @click="emit('movePortfolioUp', p.id)" title="上移">↑</button>
+              <button class="btn-arrow" @click="emit('movePortfolioDown', p.id)" title="下移">↓</button>
               <button class="btn-menu" @click="startPfRename(p)">重命名</button>
               <button class="btn-menu btn-menu-danger" @click="emit('removePortfolio', p.id)">删除</button>
             </template>
@@ -148,6 +157,8 @@ function cancelPfRename() { editingPfId.value = null; editPfName.value = ''; }
 .item-name { flex: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item-count { color: var(--text-muted); font-size: 11px; }
 .btn-menu { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 11px; padding: 2px 4px; white-space: nowrap; }
+.btn-arrow { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 10px; padding: 0 1px; line-height: 1; }
+.btn-arrow:hover { color: var(--text); }
 .btn-menu:hover { color: var(--text); }
 .btn-menu-danger:hover { color: var(--up); }
 .stats-footer { padding: 12px; border-top: 1px solid var(--border); margin-top: 8px; }

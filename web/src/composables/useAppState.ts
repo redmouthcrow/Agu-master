@@ -1297,7 +1297,8 @@ export function useAppState() {
     if (!trimmed || trimmed.length > 10) return false;
     const portfolios = config.value.portfolios ?? [];
     if (portfolios.some((p) => p.name === trimmed)) return false;
-    portfolios.push({ id: `pf_${Date.now()}`, name: trimmed, createdAt: new Date().toISOString() });
+    const maxPfOrder = portfolios.reduce((m, p) => Math.max(m, p.order ?? 0), -1);
+    portfolios.push({ id: `pf_${Date.now()}`, name: trimmed, order: maxPfOrder + 1, createdAt: new Date().toISOString() });
     config.value.portfolios = portfolios;
     persistConfig();
     broadcastLiveSync();
@@ -1345,6 +1346,54 @@ export function useAppState() {
     config.value.portfolioAssignments = (config.value.portfolioAssignments ?? []).filter(
       (a) => !(a.code === code && a.portfolioId === portfolioId),
     );
+    persistConfig();
+    broadcastLiveSync();
+  }
+
+  function moveGroupUp(id: string): void {
+    const groups = config.value.groups;
+    if (!groups || groups.length < 2) return;
+    const idx = groups.findIndex((g) => g.id === id);
+    if (idx <= 0) return;
+    [groups[idx - 1], groups[idx]] = [groups[idx], groups[idx - 1]];
+    groups[idx].order = idx;
+    groups[idx - 1].order = idx - 1;
+    persistConfig();
+    broadcastLiveSync();
+  }
+
+  function moveGroupDown(id: string): void {
+    const groups = config.value.groups;
+    if (!groups || groups.length < 2) return;
+    const idx = groups.findIndex((g) => g.id === id);
+    if (idx < 0 || idx >= groups.length - 1) return;
+    [groups[idx], groups[idx + 1]] = [groups[idx + 1], groups[idx]];
+    groups[idx].order = idx;
+    groups[idx + 1].order = idx + 1;
+    persistConfig();
+    broadcastLiveSync();
+  }
+
+  function movePortfolioUp(id: string): void {
+    const pfs = config.value.portfolios;
+    if (!pfs || pfs.length < 2) return;
+    const idx = pfs.findIndex((p) => p.id === id);
+    if (idx <= 0) return;
+    [pfs[idx - 1], pfs[idx]] = [pfs[idx], pfs[idx - 1]];
+    pfs[idx].order = idx;
+    pfs[idx - 1].order = idx - 1;
+    persistConfig();
+    broadcastLiveSync();
+  }
+
+  function movePortfolioDown(id: string): void {
+    const pfs = config.value.portfolios;
+    if (!pfs || pfs.length < 2) return;
+    const idx = pfs.findIndex((p) => p.id === id);
+    if (idx < 0 || idx >= pfs.length - 1) return;
+    [pfs[idx], pfs[idx + 1]] = [pfs[idx + 1], pfs[idx]];
+    pfs[idx].order = idx;
+    pfs[idx + 1].order = idx + 1;
     persistConfig();
     broadcastLiveSync();
   }
@@ -1467,5 +1516,9 @@ export function useAppState() {
     removeAssignment,
     getTrackingCodes,
     computePortfolioChange,
+    moveGroupUp,
+    moveGroupDown,
+    movePortfolioUp,
+    movePortfolioDown,
   };
 }
