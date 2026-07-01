@@ -26,6 +26,7 @@ const addingAsset = ref(false);
 const newAssetCode = ref('');
 const newAssetWt = ref('');
 const loading = ref(false);
+const showAll = ref(false);
 
 function startEditWeight(code: string, currentWt: number) {
   editingWeight.value = code;
@@ -58,11 +59,11 @@ function confirmAddAsset() {
   addingAsset.value = false;
 }
 
-const top3 = computed(() =>
-  [...props.assets]
-    .sort((a, b) => b.weight - a.weight)
-    .slice(0, 3),
+const sortedAssets = computed(() =>
+  [...props.assets].sort((a, b) => b.weight - a.weight),
 );
+
+const top3 = computed(() => sortedAssets.value.slice(0, 3));
 
 const restCount = computed(() =>
   Math.max(0, props.assets.length - 3),
@@ -95,7 +96,7 @@ const changeText = computed(() => {
     <div v-if="expanded" class="pf-body">
       <div class="pf-top3">
         <div
-          v-for="a in top3"
+          v-for="a in (showAll ? sortedAssets : top3)"
           :key="a.code"
           class="pf-row"
         >
@@ -124,8 +125,8 @@ const changeText = computed(() => {
           </span>
         </div>
       </div>
-      <div v-if="restCount > 0" class="pf-rest">
-        + 其余 {{ restCount }} 只持仓
+      <div v-if="restCount > 0" class="pf-rest" @click="showAll = !showAll" style="cursor:pointer">
+        {{ showAll ? '收起全部持仓' : `+ 其余 ${restCount} 只持仓` }}
       </div>
       <div v-if="!addingAsset" class="pf-rest">
         <button type="button" class="btn-link btn-link-sm" @click="addingAsset = true">
