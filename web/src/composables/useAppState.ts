@@ -1156,10 +1156,10 @@ export function useAppState() {
       await initCalendar(false);
       setupPrimaryDesktopIpc();
       startScheduler();
-      if (isInAutoTradingWindow(isTradingDay())) {
-        await runRefresh(false);
-        void refreshTrackingQuotes();
-      } else {
+      // Always do an initial refresh on startup.
+      void runRefresh(false);
+      void refreshTrackingQuotes();
+      if (!isInAutoTradingWindow(isTradingDay())) {
         broadcastLiveSync();
       }
       applyWidgetWindowSettings();

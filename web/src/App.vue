@@ -64,14 +64,14 @@ const groups = computed(() => config.value.groups ?? []);
 
 const ungroupedCount = computed(
   () => config.value.watchlist.filter(
-    (w) => !w.groupId || w.groupId === DEFAULT_GROUP_ID,
+    (w) => (!w.groupId || w.groupId === DEFAULT_GROUP_ID) && !w.trackingOnly,
   ).length,
 );
 
 const groupCounts = computed(() => {
   const map: Record<string, number> = {};
   for (const w of config.value.watchlist) {
-    if (w.groupId) {
+    if (w.groupId && !w.trackingOnly) {
       map[w.groupId] = (map[w.groupId] ?? 0) + 1;
     }
   }
