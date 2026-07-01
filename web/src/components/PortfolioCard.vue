@@ -17,6 +17,7 @@ const emit = defineEmits<{
   rename: [name: string];
   addAsset: [code: string, weight: number];
   updateWeight: [code: string, weight: number];
+  removeAsset: [code: string];
 }>();
 
 const expanded = ref(true);
@@ -123,6 +124,7 @@ const changeText = computed(() => {
           >
             {{ props.holdings[a.code]?.changePct != null ? (props.holdings[a.code]!.changePct! >= 0 ? '+' : '') + props.holdings[a.code]!.changePct!.toFixed(2) + '%' : '—' }}
           </span>
+          <button class="pf-remove" @click.stop="emit('removeAsset', a.code)">×</button>
         </div>
       </div>
       <div v-if="restCount > 0" class="pf-rest" @click="showAll = !showAll" style="cursor:pointer">
@@ -243,4 +245,6 @@ const changeText = computed(() => {
 .pf-add-row { display: flex; align-items: center; gap: 4px; padding: 6px 0; }
 .add-code { width: 200px; min-height: 26px; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
 .add-wt { width: 100px; min-height: 26px; padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
+.pf-remove { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; }
+.pf-remove:hover { color: var(--up); }
 </style>

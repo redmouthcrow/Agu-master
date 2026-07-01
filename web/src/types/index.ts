@@ -85,6 +85,8 @@ export interface WatchlistItem {
   keyLevelsLocked?: boolean;
   groupId?: string;
   refreshMode?: RefreshMode;
+  /** v2.8: true = only tracked via portfolio, not shown in diagnosis grid */
+  trackingOnly?: boolean;
 }
 
 export interface AppConfig {

@@ -52,6 +52,7 @@ const {
   getTrackingCodes,
   refreshTrackingQuotes,
   upsertAssignment,
+  removeAssignment,
   moveGroupUp,
   moveGroupDown,
   movePortfolioUp,
@@ -99,7 +100,7 @@ const groupCounts = computed(() => {
   const handled = new Set<string>();
 
   for (const group of sortedGroups) {
-    const groupCards = cards.value.filter((c) => c.stock.groupId === group.id);
+    const groupCards = cards.value.filter((c) => c.stock.groupId === group.id && !c.stock.trackingOnly);
     if (groupCards.length > 0) {
       for (const c of groupCards) {
         handled.add(c.stock.code);
@@ -110,7 +111,7 @@ const groupCounts = computed(() => {
     }
   }
 
-  const ungroupedCards = cards.value.filter((c) => !handled.has(c.stock.code));
+  const ungroupedCards = cards.value.filter((c) => !handled.has(c.stock.code) && !c.stock.trackingOnly);
   result.push({ group: null, cards: ungroupedCards });
 
   return result;
@@ -179,7 +180,8 @@ onMounted(() => {
           @refresh="refreshTrackingQuotes"
           @remove="removePortfolio(p.id)"
           @update-weight="(code, w) => upsertAssignment(code, p.id, w)"
-          @add-asset="(code, w) => { addSymbol(code); upsertAssignment(code, p.id, w); }"
+          @remove-asset="(code) => removeAssignment(code, p.id)"
+          @add-asset="(code, w) => { addSymbol(code, undefined, undefined); upsertAssignment(code, p.id, w); const item = config.watchlist.find(x => x.code === code); if (item) item.trackingOnly = true; }"
         />
 
         <div
