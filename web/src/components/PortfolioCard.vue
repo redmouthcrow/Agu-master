@@ -3,6 +3,25 @@ import { computed, ref } from 'vue';
 import type { Portfolio, PortfolioAssignment } from '../types';
 import { normalizeWatchlistSymbol } from '../utils/stockCode';
 
+const SECTORS = [
+  { code: '', name: '不选' },
+  { code: 'sh512480', name: '半导体' },
+  { code: 'sh512690', name: '白酒' },
+  { code: 'sh516160', name: '新能源' },
+  { code: 'sh512010', name: '医药' },
+  { code: 'sh512800', name: '银行' },
+  { code: 'sh512660', name: '军工' },
+  { code: 'sh515000', name: '科技' },
+  { code: 'sh512880', name: '证券' },
+  { code: 'sh512200', name: '地产' },
+  { code: 'sh515220', name: '煤炭' },
+  { code: 'sh512400', name: '有色' },
+  { code: 'sh516880', name: '光伏' },
+  { code: 'sh516110', name: '汽车' },
+  { code: 'sh515070', name: '人工智能' },
+  { code: 'sh512600', name: '消费' },
+];
+
 const props = defineProps<{
   portfolio: Portfolio;
   assets: PortfolioAssignment[];
@@ -18,6 +37,7 @@ const emit = defineEmits<{
   addAsset: [code: string, weight: number];
   updateWeight: [code: string, weight: number];
   removeAsset: [code: string];
+  setSector: [sectorCode: string];
 }>();
 
 const expanded = ref(true);
@@ -89,7 +109,9 @@ const changeText = computed(() => {
         {{ expanded ? '▾' : '▸' }}
       </button>
       <span class="pf-name">{{ portfolio.name }}</span>
-      <span v-if="portfolio.sectorCode" class="pf-sector">{{ portfolio.sectorCode.replace(/^sh|sz|bj|hk/i, '') }}</span>
+      <select class="pf-sector-select" :value="portfolio.sectorCode ?? ''" @change="emit('setSector', ($event.target as HTMLSelectElement).value)">
+        <option v-for="s in SECTORS" :key="s.code" :value="s.code">{{ s.name }}</option>
+      </select>
       <span class="pf-change" :class="changeClass">{{ changeText }}</span>
       <button type="button" class="btn-refresh" :disabled="loading" :title="loading ? '刷新中…' : '刷新组合行情'" @click="doRefresh">{{ loading ? '⌛' : '↻' }}</button>
       <button type="button" class="btn-remove" aria-label="删除组合" @click="emit('remove')">×</button>
@@ -170,6 +192,7 @@ const changeText = computed(() => {
   flex: 1;
 }
 .pf-sector { font-size: 10px; color: var(--text-dim); background: var(--bg); padding: 1px 5px; border-radius: 3px; }
+.pf-sector-select { min-height: 22px; padding: 0 3px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text-muted); font-size: 10px; max-width: 72px; }
 
 .pf-change {
   font-size: 14px;

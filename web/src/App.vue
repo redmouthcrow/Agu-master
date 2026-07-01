@@ -151,7 +151,6 @@ onMounted(() => {
       @remove-portfolio="removePortfolio"
       @move-portfolio-up="movePortfolioUp"
       @move-portfolio-down="movePortfolioDown"
-      @set-portfolio-sector="(id, sc) => setPortfolioSector(id, sc)"
       @open-about="aboutOpen = true"
     />
 
@@ -189,6 +188,7 @@ onMounted(() => {
           :holdings="holdingsMap"
           @refresh="refreshTrackingQuotes"
           @remove="removePortfolio(p.id)"
+          @set-sector="(sc) => setPortfolioSector(p.id, sc)"
           @update-weight="(code, w) => upsertAssignment(code, p.id, w)"
           @remove-asset="(code) => removeAssignment(code, p.id)"
           @add-asset="(code, w) => { addSymbol(code, undefined, undefined); upsertAssignment(code, p.id, w); const item = config.watchlist.find(x => x.code === code); if (item) item.trackingOnly = true; }"
