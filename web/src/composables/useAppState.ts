@@ -914,6 +914,15 @@ export function useAppState() {
       delete item.actualPnl;
       delete card.stock.actualPnl;
     }
+    // Invalidate cached diagnosis — position changed, old AI advice is stale.
+    if (card.diagnosis) {
+      card.diagnosis = null;
+      card.updatedAt = null;
+      card.diagnosisReused = false;
+      delete getDiagnosisCache()[code];
+      // Also clear the fingerprint so next refresh doesn't hit the "reused" path.
+      flushDiagnosisCache();
+    }
     cards.value = [...cards.value];
     persistConfig();
     broadcastLiveSync();
