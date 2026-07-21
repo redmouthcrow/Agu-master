@@ -862,7 +862,18 @@ export function useAppState() {
     if (!applyPositionFields(item, positionQty, costPrice)) {
       return;
     }
-    card.stock = { ...item };
+    // Mutate card.stock in-place to preserve shared reference with config.watchlist.
+    if (item.positionQty != null) {
+      card.stock.positionQty = item.positionQty;
+    } else {
+      delete card.stock.positionQty;
+    }
+    if (item.costPrice != null) {
+      card.stock.costPrice = item.costPrice;
+    } else {
+      delete card.stock.costPrice;
+    }
+    cards.value = [...cards.value];
     persistConfig();
     broadcastLiveSync();
   }
