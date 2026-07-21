@@ -1,7 +1,6 @@
 import {
   type KeyLevel,
   type WatchlistItem,
-  KEY_LEVEL_DEVIATION_THRESHOLD,
   MAX_KEY_LEVELS,
 } from '../types';
 
@@ -11,13 +10,6 @@ function roundKeyPrice(price: number): number {
 
 function findAiLevel(levels: KeyLevel[], type: 'support' | 'resistance'): KeyLevel | undefined {
   return levels.find((l) => l.type === type && l.source === 'ai');
-}
-
-function deviationExceeds(oldVal: number, newVal: number): boolean {
-  if (oldVal === 0) {
-    return true;
-  }
-  return Math.abs(newVal - oldVal) / oldVal > KEY_LEVEL_DEVIATION_THRESHOLD;
 }
 
 export function applyKeyLevelsFromDiagnosis(
@@ -38,30 +30,26 @@ export function applyKeyLevelsFromDiagnosis(
 
   if (supportLevel != null) {
     const old = findAiLevel(levels, 'support');
-    if (!old || !deviationExceeds(old.price, supportLevel)) {
-      const rounded = roundKeyPrice(supportLevel);
-      if (old) {
-        old.price = rounded;
-        old.updatedAt = now;
-      } else {
-        levels.push({ price: rounded, label: '支撑位', type: 'support', source: 'ai', updatedAt: now });
-      }
-      updated = true;
+    const rounded = roundKeyPrice(supportLevel);
+    if (old) {
+      old.price = rounded;
+      old.updatedAt = now;
+    } else {
+      levels.push({ price: rounded, label: '支撑位', type: 'support', source: 'ai', updatedAt: now });
     }
+    updated = true;
   }
 
   if (resistanceLevel != null) {
     const old = findAiLevel(levels, 'resistance');
-    if (!old || !deviationExceeds(old.price, resistanceLevel)) {
-      const rounded = roundKeyPrice(resistanceLevel);
-      if (old) {
-        old.price = rounded;
-        old.updatedAt = now;
-      } else {
-        levels.push({ price: rounded, label: '压力位', type: 'resistance', source: 'ai', updatedAt: now });
-      }
-      updated = true;
+    const rounded = roundKeyPrice(resistanceLevel);
+    if (old) {
+      old.price = rounded;
+      old.updatedAt = now;
+    } else {
+      levels.push({ price: rounded, label: '压力位', type: 'resistance', source: 'ai', updatedAt: now });
     }
+    updated = true;
   }
 
   if (updated) {
