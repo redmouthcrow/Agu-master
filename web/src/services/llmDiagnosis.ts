@@ -29,7 +29,7 @@ const SYSTEM_PROMPT_BASE = `# Role
 2. 形态诊断 (analysis)：限 50 字以内。必须包含一个显性量价特征（如：30m放量滞涨）+ 一个短期趋势推导（如：向日内低点回踩测试支撑）。
 3. 风险预测 (risk)：限 50 字以内。必须指出明确的右侧破位条件或动能衰竭信号（如：一旦跌破今日低点XX元将引发多头踩踏，或：MACD 30m级别顶背离隐患）。
 4. 关键位 (supportLevel / resistanceLevel)：根据当前快照的 price、high、low、prevClose 及量价特征，推算最贴近当前价格的近端技术支撑位和近端技术压力位。单位为元，保留 3 位小数。支撑位应低于当前价，压力位应高于当前价。
-5. 建仓建议 (buildPositionAdvice)：限 30 字以内。必须锚定上述 supportLevel / resistanceLevel 与当前价 price 的相对位置，给出建仓方向与建议价位（如：可等待放量企稳支撑位后轻仓试多 / 接近阻力位暂不建议追高建仓）。严禁脱离关键位凭空给出买卖建议。
+5. 建仓建议 (buildPositionAdvice)：限 40 字以内。必须锚定上述 supportLevel / resistanceLevel 与当前价 price 的相对位置，给出建仓方向、建议价位与**具体建议仓位数量**（如：可等支撑位企稳后轻仓试多5手 / 接近阻力位暂不建议追高建仓 / 可半仓试探6手止损设于支撑下方）。严禁脱离关键位凭空给出买卖建议。
 
 # Investment Style (投资风格)
 当前用户投资风格：{styleLabel}。你必须根据此风格调整风险偏好与建议措辞：
@@ -50,7 +50,7 @@ const SYSTEM_PROMPT_BASE = `# Role
   "signal": "4字标准标签",
   "analysis": "高密度量价技术面诊断（不超过50字）",
   "risk": "明确的破位或衰竭风险预测（不超过50字）",
-  "buildPositionAdvice": "锚定关键位的建仓建议（不超过30字）",
+  "buildPositionAdvice": "锚定关键位的建仓建议(含仓位数量,不超过40字)",
   "supportLevel": 6.12,
   "resistanceLevel": 6.85
 }`;
@@ -58,13 +58,13 @@ const SYSTEM_PROMPT_BASE = `# Role
 const SYSTEM_PROMPT_WITH_POSITION = `${SYSTEM_PROMPT_BASE}
 
 # Position Context (持仓上下文)
-当 User Message 包含持仓信息（qty、cost、pnlPct）时，必须额外输出 shortAction 字段（不超过30字），结合浮动盈亏率 pnlPct 与 signal 给出可执行短期持仓建议。严禁对微小浮动盈亏（pnlPct 绝对值 < 2%）给出减仓建议——微盈时信号应为多头持股或持股观望，shortAction 建议持有或关注关键位得失。JSON 格式：
+当 User Message 包含持仓信息（qty、cost、pnlPct）时，必须额外输出 shortAction 字段（不超过40字），结合浮动盈亏率 pnlPct 与 signal 给出可执行短期持仓建议，**必须包含具体数量**（如：减半仓卖出500股 / 加仓2手 / 全部止盈清仓 / 持有不动）。严禁对微小浮动盈亏（pnlPct 绝对值 < 2%）给出减仓建议——微盈时信号应为多头持股或持股观望，shortAction 建议持有或关注关键位得失。JSON 格式：
 {
   "signal": "4字标准标签",
   "analysis": "高密度量价技术面诊断（不超过50字）",
   "risk": "明确的破位或衰竭风险预测（不超过50字）",
-  "bandAction": "锚定关键位的波段建议（不超过30字）",
-  "shortAction": "可执行短期持仓建议（不超过30字）",
+  "bandAction": "锚定关键位的波段建议(含仓位指引,不超过40字)",
+  "shortAction": "可执行短期持仓建议(含具体数量,不超过40字)",
   "supportLevel": 6.12,
   "resistanceLevel": 6.85
 }`;
@@ -207,12 +207,12 @@ export async function runDiagnosis(
       return { ok: false, raw };
     }
     if (withPosition) {
-      if (!parsed.shortAction || parsed.shortAction.length > 30) {
+      if (!parsed.shortAction || parsed.shortAction.length > 40) {
         return { ok: false, raw };
       }
       if (
         !parsed.bandAction ||
-        parsed.bandAction.length > 30 ||
+        parsed.bandAction.length > 40 ||
         !anchorsToKeyLevel(parsed.bandAction, parsed.supportLevel, parsed.resistanceLevel)
       ) {
         return { ok: false, raw };
@@ -220,7 +220,7 @@ export async function runDiagnosis(
     } else {
       if (
         !parsed.buildPositionAdvice ||
-        parsed.buildPositionAdvice.length > 30 ||
+        parsed.buildPositionAdvice.length > 40 ||
         !anchorsToKeyLevel(parsed.buildPositionAdvice, parsed.supportLevel, parsed.resistanceLevel)
       ) {
         return { ok: false, raw };
