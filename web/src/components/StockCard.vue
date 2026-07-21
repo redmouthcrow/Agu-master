@@ -10,6 +10,8 @@ const props = defineProps<{
   groups?: UserGroup[];
   /** 悬浮窗：只读，隐藏删除与持仓编辑 */
   widgetMode?: boolean;
+  /** v2.9: user-specified total portfolio value for weight display */
+  totalCapital?: number;
 }>();
 
 const emit = defineEmits<{
@@ -77,11 +79,16 @@ const positionLine = computed(() => {
       ? t('common.fundUnit')
       : t('common.stockUnit');
   const pnl = calcPnlPct(props.card.snapshot?.price, props.card.stock.costPrice!);
+  // Weight % of total portfolio.
+  const posValue = props.card.stock.positionQty! * props.card.stock.costPrice!;
+  const totalCapital = props.totalCapital;
+  const weightPct = totalCapital && totalCapital > 0 ? Math.round((posValue / totalCapital) * 100) : null;
   return {
     qty: props.card.stock.positionQty,
     unit,
     cost: props.card.stock.costPrice,
     pnl,
+    weightPct,
   };
 });
 
@@ -291,6 +298,9 @@ const customKeyLevelCount = computed(
             · {{ t('card.positionPnl') }}
             <span class="tabular" :class="pnlClass">{{ formatPct(positionLine.pnl) }}</span>
           </template>
+          <template v-if="positionLine.weightPct !== null">
+            · 仓位 {{ positionLine.weightPct }}%
+          </template>
         </span>
         <button
           v-if="!widgetMode"
@@ -314,13 +324,13 @@ const customKeyLevelCount = computed(
       <div v-if="editingPosition && !widgetMode" class="position-edit">
         <input v-model="editQty" type="number" min="1" step="1" :placeholder="t('card.positionQty')" />
         <input v-model="editCost" type="number" min="0.001" step="0.001" :placeholder="t('card.positionCost')" />
-        <button type="button" class="btn-save" @click="savePosition">
+        <button type="button" class="btn-link btn-link-sm" @click="savePosition">
           {{ t('common.save') }}
         </button>
-        <button type="button" class="btn-link" @click="clearPosition">
+        <button type="button" class="btn-link btn-link-sm" @click="clearPosition">
           {{ t('common.clear') }}
         </button>
-        <button type="button" class="btn-link" @click="editingPosition = false">
+        <button type="button" class="btn-link btn-link-sm" @click="editingPosition = false">
           {{ t('common.cancel') }}
         </button>
       </div>

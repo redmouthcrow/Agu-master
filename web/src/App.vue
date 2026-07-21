@@ -232,6 +232,7 @@ onMounted(() => {
                 :key="card.stock.code"
                 :card="card"
                 :groups="groups"
+                :total-capital="config.totalCapital"
                 @remove="removeSymbol"
                 @refresh="runRefreshSymbol"
                 @update-position="updateSymbolPosition"
