@@ -314,13 +314,13 @@ const customKeyLevelCount = computed(
       <div v-if="editingPosition && !widgetMode" class="position-edit">
         <input v-model="editQty" type="number" min="1" step="1" :placeholder="t('card.positionQty')" />
         <input v-model="editCost" type="number" min="0.001" step="0.001" :placeholder="t('card.positionCost')" />
-        <button type="button" class="btn-link btn-link-sm" @click="savePosition">
+        <button type="button" class="btn-save" @click="savePosition">
           {{ t('common.save') }}
         </button>
-        <button type="button" class="btn-link btn-link-sm" @click="clearPosition">
+        <button type="button" class="btn-link" @click="clearPosition">
           {{ t('common.clear') }}
         </button>
-        <button type="button" class="btn-link btn-link-sm" @click="editingPosition = false">
+        <button type="button" class="btn-link" @click="editingPosition = false">
           {{ t('common.cancel') }}
         </button>
       </div>
