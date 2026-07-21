@@ -298,13 +298,13 @@ const customKeyLevelCount = computed(
           class="btn-link btn-link-sm"
           @click="startEditPosition"
         >
-          {{ t('common.edit') }}
+          ✎ {{ t('common.edit') }}
         </button>
       </div>
       <div v-else-if="!widgetMode" class="position-line">
         <button
           type="button"
-          class="btn-link btn-link-sm"
+          class="btn-link"
           @click="startEditPosition"
         >
           {{ t('card.addPosition') }}
