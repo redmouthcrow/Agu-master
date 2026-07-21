@@ -164,8 +164,8 @@ export async function runDiagnosis(
   const style = config.investmentStyle ?? 'neutral';
   const styleLabel = STYLE_LABELS[style] ?? '中立';
 
-  // Compute total portfolio value for position weighting.
-  const totalPortfolioValue = config.watchlist.reduce((sum, w) => {
+  // Total portfolio: user-specified overrides computed.
+  const totalPortfolioValue = config.totalCapital ?? config.watchlist.reduce((sum, w) => {
     if (hasPosition(w)) return sum + w.positionQty! * w.costPrice!;
     return sum;
   }, 0);

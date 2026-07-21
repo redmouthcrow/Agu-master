@@ -98,6 +98,8 @@ export interface AppConfig {
   refreshFrequency: RefreshFrequency;
   /** Global investment style (v2.7): aggressive | neutral | conservative. */
   investmentStyle?: 'aggressive' | 'neutral' | 'conservative';
+  /** v2.9: User-specified total portfolio capital (元). If set, overrides computed total for position weighting. */
+  totalCapital?: number;
   watchlist: WatchlistItem[];
   groups?: UserGroup[];
   /** v2.8 portfolio tracking */

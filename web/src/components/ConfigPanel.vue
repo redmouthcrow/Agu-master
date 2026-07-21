@@ -230,6 +230,17 @@ function onAlwaysOnTopChange(e: Event) {
         </select>
       </label>
       <label class="field">
+        <span>总仓位金额(元)</span>
+        <input
+          type="number"
+          min="0"
+          step="1000"
+          :value="config.totalCapital ?? ''"
+          placeholder="如100000，留空则自动计算"
+          @change="emit('save', { totalCapital: Number(($event.target as HTMLInputElement).value) || undefined })"
+        />
+      </label>
+      <label class="field">
         <span>{{ t('config.refreshFrequency') }}</span>
         <select
           :value="config.refreshFrequency"
