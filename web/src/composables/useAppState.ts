@@ -908,6 +908,7 @@ export function useAppState() {
 
     const card = cards.value.find((c) => c.stock.code === code);
     if (!card || card.loading) {
+      broadcastLiveSync();
       return;
     }
 
