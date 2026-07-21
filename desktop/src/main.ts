@@ -107,9 +107,7 @@ function createWidgetWindow(): BrowserWindow {
 
   void win.loadURL(pageUrl('widget'));
   attachWidgetBoundsPersistence(win);
-  win.webContents.on('did-finish-load', () => {
-    pushLiveSyncToWidget();
-  });
+  // No initial push — widget requests sync after bootstrap to get fresh data.
   win.once('ready-to-show', () => {
     win.show();
   });
