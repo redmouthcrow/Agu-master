@@ -583,9 +583,20 @@ function mergeCardsFromWatchlist(
   return watchlist.map((item) => {
     const synced = byCode.get(item.code);
     if (synced) {
+      const prev = existing.get(item.code);
+      // Preserve local position data if it exists — dashboard broadcasts may
+      // arrive out of order during refresh, and local edits should survive.
+      const stock = {
+        ...item,
+        ...synced.stock,
+        code: item.code,
+        positionQty: prev?.stock.positionQty ?? synced.stock.positionQty ?? item.positionQty,
+        costPrice: prev?.stock.costPrice ?? synced.stock.costPrice ?? item.costPrice,
+        actualPnl: prev?.stock.actualPnl ?? synced.stock.actualPnl ?? item.actualPnl,
+      };
       return {
         ...synced,
-        stock: { ...item, ...synced.stock, code: item.code },
+        stock,
         snapshot: synced.snapshot ? { ...synced.snapshot } : null,
         diagnosis: synced.diagnosis ? { ...synced.diagnosis } : null,
       };
