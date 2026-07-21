@@ -47,7 +47,6 @@ import {
   desktopStorageSet,
   desktopCleanupCalendars,
   loadDesktopUserData,
-  loadDesktopLiveSync,
   migrateBrowserStorageToDesktop,
   saveDesktopConfig,
   saveDesktopDiagnosisCache,
@@ -727,14 +726,12 @@ async function hydrateDesktopPersistence(): Promise<void> {
   storageOk.value = true;
 }
 
-async function bootstrapWidgetDesktopState(): Promise<void> {
-  activateDesktopStorageMirror();
-  await preloadDesktopCalendars();
-  const cached = await loadDesktopLiveSync();
-  if (cached && isNewerLiveSync(cached, lastAppliedSyncTs)) {
-    applyLiveSync(cached);
+  async function bootstrapWidgetDesktopState(): Promise<void> {
+    activateDesktopStorageMirror();
+    await preloadDesktopCalendars();
+    // Don't load cached sync — it may be stale (widget was closed while dashboard updated).
+    // Widget gets fresh data via requestSync() after setupWidgetDesktopIpc is in place.
   }
-}
 
 function applyWidgetWindowSettings() {
   if (!isDesktopRuntime()) {
@@ -1231,12 +1228,7 @@ export function useAppState() {
 
     setupWidgetDesktopIpc();
     setupWidgetStorageListener();
-    if (!isDesktopRuntime()) {
-      const cached = getItem<LiveSyncPayload>(LIVE_SYNC_KEY);
-      if (cached && isNewerLiveSync(cached, lastAppliedSyncTs)) {
-        applyLiveSync(cached);
-      }
-    }
+    // v2.8: don't load cached sync — always request fresh data from dashboard.
     window.aguDesktop?.requestSync();
     applyWidgetWindowSettings();
   }
