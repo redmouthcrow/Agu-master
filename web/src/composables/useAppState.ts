@@ -524,7 +524,26 @@ const pinnedCodes = computed(() =>
 
 const pinnedCards = computed(() =>
   pinnedCodes.value
-    .map((code) => cards.value.find((c) => c.stock.code === code))
+    .map((code) => {
+      const card = cards.value.find((c) => c.stock.code === code);
+      if (card) return card;
+      // Fallback: create a placeholder card so the widget never loses a pin.
+      const watchItem = config.value.watchlist.find((w) => w.code === code);
+      if (!watchItem) return null;
+      const cache = getDiagnosisCache();
+      return {
+        stock: watchItem,
+        snapshot: null,
+        diagnosis: cache[code]?.diagnosis ?? null,
+        quoteError: false,
+        aiError: null,
+        parseError: false,
+        rawAiText: null,
+        loading: false,
+        updatedAt: cache[code]?.updatedAt || null,
+        diagnosisReused: false,
+      } as StockCardState;
+    })
     .filter((c): c is StockCardState => c != null),
 );
 
