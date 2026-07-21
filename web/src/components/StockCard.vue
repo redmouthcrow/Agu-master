@@ -17,7 +17,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   remove: [code: string];
   refresh: [code: string];
-  updatePosition: [code: string, positionQty?: number, costPrice?: number];
+  updatePosition: [code: string, positionQty?: number, costPrice?: number, actualPnl?: number];
   toast: [message: string];
   addKeyLevel: [code: string, price: number, label: string];
   removeKeyLevel: [code: string, index: number];
@@ -31,6 +31,7 @@ const { t } = useI18n();
 const editingPosition = ref(false);
 const editQty = ref('');
 const editCost = ref('');
+const editActualPnl = ref('');
 
 const addingKeyLevel = ref(false);
 const newKlPrice = ref('');
@@ -161,6 +162,8 @@ function startEditPosition() {
     props.card.stock.costPrice != null
       ? formatCostPrice(props.card.stock.costPrice)
       : '';
+  editActualPnl.value =
+    props.card.stock.actualPnl != null ? String(props.card.stock.actualPnl) : '';
   editingPosition.value = true;
 }
 
@@ -175,6 +178,7 @@ function savePosition() {
     props.card.stock.code,
     position.positionQty,
     position.costPrice,
+    Number(editActualPnl.value) || undefined,
   );
   editingPosition.value = false;
 }
@@ -301,6 +305,9 @@ const customKeyLevelCount = computed(
           <template v-if="positionLine.weightPct !== null">
             · 仓位 {{ positionLine.weightPct }}%
           </template>
+          <template v-if="card.stock.actualPnl != null">
+            · 已实现 {{ card.stock.actualPnl! >= 0 ? '+' : '' }}{{ card.stock.actualPnl }}元
+          </template>
         </span>
         <button
           v-if="!widgetMode"
@@ -324,6 +331,7 @@ const customKeyLevelCount = computed(
       <div v-if="editingPosition && !widgetMode" class="position-edit">
         <input v-model="editQty" type="number" min="1" step="1" :placeholder="t('card.positionQty')" />
         <input v-model="editCost" type="number" min="0.001" step="0.001" :placeholder="t('card.positionCost')" />
+        <input v-model="editActualPnl" type="number" step="1" placeholder="已实现盈亏(元)" />
         <button type="button" class="btn-link btn-link-sm" @click="savePosition">
           {{ t('common.save') }}
         </button>

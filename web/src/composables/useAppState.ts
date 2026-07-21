@@ -853,6 +853,7 @@ export function useAppState() {
     code: string,
     positionQty?: number,
     costPrice?: number,
+    actualPnl?: number,
   ) {
     const item = config.value.watchlist.find((s) => s.code === code);
     const card = cards.value.find((c) => c.stock.code === code);
@@ -872,6 +873,16 @@ export function useAppState() {
       card.stock.costPrice = item.costPrice;
     } else {
       delete card.stock.costPrice;
+    }
+    // Actual PnL
+    if (actualPnl != null) {
+      item.actualPnl = actualPnl;
+      card.stock.actualPnl = actualPnl;
+    } else if (actualPnl === undefined) {
+      // keep existing value when not explicitly cleared
+    } else {
+      delete item.actualPnl;
+      delete card.stock.actualPnl;
     }
     cards.value = [...cards.value];
     persistConfig();

@@ -136,6 +136,7 @@ function buildUserMessage(
     msg += `\n持仓: qty=${watchlistItem.positionQty}${unit}, cost=${roundCostPrice(watchlistItem.costPrice!)}, pnlPct=${pnlStr}%`;
     if (absPnl != null) msg += `, 浮动盈亏=${absPnl}元`;
     if (weightPct != null) msg += `, 占总仓位约${weightPct}%`;
+    if (watchlistItem.actualPnl != null) msg += `, 已实现盈亏=${watchlistItem.actualPnl}元`;
   }
 
   return msg;

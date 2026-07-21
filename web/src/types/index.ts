@@ -83,6 +83,8 @@ export interface WatchlistItem {
   instrumentType: InstrumentType;
   positionQty?: number;
   costPrice?: number;
+  /** v2.9: User-reported realized PnL (元), for when actual trades differ from snapshotted cost basis. */
+  actualPnl?: number;
   keyLevels?: KeyLevel[];
   keyLevelsLocked?: boolean;
   groupId?: string;
