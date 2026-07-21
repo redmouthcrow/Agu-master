@@ -85,6 +85,7 @@ function buildUserMessage(
   alignedTime: string,
   session: SessionLabel,
   investmentStyle: string,
+  totalPortfolioValue: number,
 ): string {
   const volume = formatVolumeForPrompt(snapshot.volume, session);
   const change =
@@ -128,7 +129,13 @@ function buildUserMessage(
     const pnl = calcPnlPct(snapshot.price, watchlistItem.costPrice!);
     const pnlStr = pnl === null ? 'null' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`;
     const unit = watchlistItem.instrumentType === 'fund_etf' ? '份' : '股';
+    // Absolute PnL and position weight.
+    const absPnl = snapshot.price != null ? Math.round((snapshot.price - watchlistItem.costPrice!) * watchlistItem.positionQty!) : null;
+    const positionValue = watchlistItem.positionQty! * watchlistItem.costPrice!;
+    const weightPct = totalPortfolioValue > 0 ? Math.round((positionValue / totalPortfolioValue) * 100) : null;
     msg += `\n持仓: qty=${watchlistItem.positionQty}${unit}, cost=${roundCostPrice(watchlistItem.costPrice!)}, pnlPct=${pnlStr}%`;
+    if (absPnl != null) msg += `, 浮动盈亏=${absPnl}元`;
+    if (weightPct != null) msg += `, 占总仓位约${weightPct}%`;
   }
 
   return msg;
@@ -157,6 +164,12 @@ export async function runDiagnosis(
   const style = config.investmentStyle ?? 'neutral';
   const styleLabel = STYLE_LABELS[style] ?? '中立';
 
+  // Compute total portfolio value for position weighting.
+  const totalPortfolioValue = config.watchlist.reduce((sum, w) => {
+    if (hasPosition(w)) return sum + w.positionQty! * w.costPrice!;
+    return sum;
+  }, 0);
+
   // Inject style label into the system prompt template.
   const systemContent = (
     withPosition ? SYSTEM_PROMPT_WITH_POSITION : SYSTEM_PROMPT_BASE
@@ -168,7 +181,7 @@ export async function runDiagnosis(
       { role: 'system', content: systemContent },
       {
         role: 'user',
-        content: buildUserMessage(snapshot, watchlistItem, alignedTime, session, style),
+        content: buildUserMessage(snapshot, watchlistItem, alignedTime, session, style, totalPortfolioValue),
       },
     ],
     response_format: { type: 'json_object' },
