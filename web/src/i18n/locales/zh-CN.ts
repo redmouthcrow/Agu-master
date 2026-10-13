@@ -135,6 +135,7 @@ export const zhCN = {
   'perf.legendEquity': '策略净值',
   'perf.legendBenchmark': '沪深300',
   'perf.curveAccumulating': '净值曲线需累积 2 天以上数据',
+  'perf.emptyCurve': '暂无净值数据，刷新后自动记录',
   'perf.empty': '暂无成交数据',
   'perf.attrType': '建议类型',
   'perf.attrCount': '成交笔数',

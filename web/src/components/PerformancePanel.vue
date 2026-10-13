@@ -113,7 +113,7 @@ const attributionLabels: Record<string, string> = {
             </div>
           </template>
           <div v-else class="perf-empty">
-            {{ hasTrades ? t('perf.curveAccumulating') : t('perf.empty') }}
+            {{ snapshots.length >= 1 ? t('perf.curveAccumulating') : t('perf.emptyCurve') }}
           </div>
         </div>
 

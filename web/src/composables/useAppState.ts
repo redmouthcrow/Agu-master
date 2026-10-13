@@ -183,6 +183,7 @@ async function snapshotEquity(): Promise<void> {
 
   let marketValue = 0;
   let unrealized = 0;
+  let countedPositions = 0;
   for (const item of watchlist) {
     if (item.positionQty == null) {
       continue;
@@ -199,6 +200,11 @@ async function snapshotEquity(): Promise<void> {
     if (item.costPrice != null) {
       unrealized += (price - item.costPrice) * item.positionQty;
     }
+    countedPositions += 1;
+  }
+  // No positions to value — a cash-only curve carries no signal; skip.
+  if (countedPositions === 0) {
+    return;
   }
 
   // Fetch the index close for benchmark comparison (failure → undefined).

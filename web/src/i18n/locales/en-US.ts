@@ -138,6 +138,7 @@ export const enUS: Record<MessageKey, string> = {
   'perf.legendEquity': 'Strategy equity',
   'perf.legendBenchmark': 'CSI300',
   'perf.curveAccumulating': 'Equity curve needs 2+ days of snapshots',
+  'perf.emptyCurve': 'No equity data yet; recorded automatically on refresh',
   'perf.empty': 'No trades yet',
   'perf.attrType': 'Advice type',
   'perf.attrCount': 'Sells',
