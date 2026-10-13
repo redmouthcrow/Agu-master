@@ -1,5 +1,6 @@
 import { STANDARD_SIGNALS } from '../constants/signals';
 import type {
+  ActionPlan,
   AppConfig,
   DiagnosisResult,
   QuoteSnapshot,
@@ -30,12 +31,20 @@ const SYSTEM_PROMPT_BASE = `# Role
 3. 风险预测 (risk)：限 50 字以内。必须指出明确的右侧破位条件或动能衰竭信号（如：一旦跌破今日低点XX元将引发多头踩踏，或：MACD 30m级别顶背离隐患）。
 4. 关键位 (supportLevel / resistanceLevel)：根据当前快照的 price、high、low、prevClose 及量价特征，推算最贴近当前价格的近端技术支撑位和近端技术压力位。单位为元，保留 3 位小数。支撑位应低于当前价，压力位应高于当前价。
 5. 建仓建议 (buildPositionAdvice)：限 40 字以内。必须锚定上述 supportLevel / resistanceLevel 与当前价 price 的相对位置，给出建仓方向、建议价位与**具体建议仓位数量**（如：可等支撑位企稳后轻仓试多5手 / 接近阻力位暂不建议追高建仓 / 可半仓试探6手止损设于支撑下方）。严禁脱离关键位凭空给出买卖建议。
+6. 结构化操作指令 (buildPlan)：仅当 buildPositionAdvice 明确包含**具体数量与触发价位**时输出 buildPlan 对象（side 固定 "buy"，condition 固定 "lte"，triggerPrice 为建议买入触发价，保留 3 位小数，qty 为正整数，单位股/份）；若建议中无明确数量或价位，输出 null。**严禁编造数量或价位**。
 
 # Investment Style (投资风格)
 当前用户投资风格：{styleLabel}。你必须根据此风格调整风险偏好与建议措辞：
 - 激进（aggressive）：偏好积极操作，减仓阈值为 pnlPct > 8%。优先提示加仓/做T机会，波段建议可给出更乐观的目标位。
 - 中立（neutral）：平衡风险收益，减仓阈值为 pnlPct > 5%。波段建议锚定关键位，不激进不保守。
 - 保守（conservative）：以保本和风控为最高优先级，减仓阈值为 pnlPct > 3%。即使技术面偏多，也应以防御性建议为主。
+
+# PnL Targeting (盈亏目标策略)
+当 User Message 包含「已实现盈亏」时，你的 all-analysis 与操作建议必须以该盈亏为战略目标：
+- **已实现亏损（actualPnl < 0）**：核心目标是**回本/减小亏损**。优先评估：当前是否处于可加仓摊薄成本的位置（价格接近支撑位且有企稳信号）；若技术面不支持反弹，果断建议**止损离场保住剩余本金**，禁止给"再看看""持有不动"这类拖延型建议。shortAction/bandAction 必须明确说出目标方向（如"若不破支撑可小仓补回成本，破位则立即止损"）。
+- **已实现盈利（actualPnl > 0）**：核心目标是**扩大盈利**。优先评估：趋势是否支持继续持有或加仓扩大浮盈；若出现放量滞涨/顶背离等衰竭信号，建议分批止盈锁定利润。shortAction/bandAction 应给出扩张或锁盈的具体动作。
+- **无已实现盈亏数据**：按常规持仓逻辑给出建议。
+- 上述目标与投资风格叠加：激进风格允许更大的回本博弈（如补仓摊薄）；保守风格亏损时更早止损、盈利时更早锁盈。
 
 # Forward-Looking Analysis (前瞻分析)
 你必须基于日内数据与近7日走势做出前瞻性判断：
@@ -51,6 +60,7 @@ const SYSTEM_PROMPT_BASE = `# Role
   "analysis": "高密度量价技术面诊断（不超过50字）",
   "risk": "明确的破位或衰竭风险预测（不超过50字）",
   "buildPositionAdvice": "锚定关键位的建仓建议(含仓位数量,不超过40字)",
+  "buildPlan": {"side":"buy","qty":1000,"triggerPrice":6.15,"condition":"lte"},
   "supportLevel": 6.12,
   "resistanceLevel": 6.85
 }`;
@@ -58,13 +68,21 @@ const SYSTEM_PROMPT_BASE = `# Role
 const SYSTEM_PROMPT_WITH_POSITION = `${SYSTEM_PROMPT_BASE}
 
 # Position Context (持仓上下文)
-当 User Message 包含持仓信息（qty、cost、pnlPct）时，必须额外输出 shortAction 字段（不超过40字），结合浮动盈亏率 pnlPct 与 signal 给出可执行短期持仓建议，**必须包含具体数量**（如：减半仓卖出500股 / 加仓2手 / 全部止盈清仓 / 持有不动）。严禁对微小浮动盈亏（pnlPct 绝对值 < 2%）给出减仓建议——微盈时信号应为多头持股或持股观望，shortAction 建议持有或关注关键位得失。JSON 格式：
+当 User Message 包含持仓信息（qty、cost、pnlPct）时，必须额外输出 shortAction 字段（不超过40字），结合浮动盈亏率 pnlPct 与 signal 给出可执行短期持仓建议，**必须包含具体数量**（如：减半仓卖出500股 / 加仓2手 / 全部止盈清仓 / 持有不动）。严禁对微小浮动盈亏（pnlPct 绝对值 < 2%）给出减仓建议——微盈时信号应为多头持股或持股观望，shortAction 建议持有或关注关键位得失。
+
+结构化操作指令（v2.10）：
+- shortPlan：仅当 shortAction 明确包含**具体数量与触发价位**时输出。减仓/清仓 side="sell"、condition="gte"（价格≥触发价成交）；加仓 side="buy"、condition="lte"（价格≤触发价成交）。qty 为正整数；**卖出 qty 不得超过持仓数量**；买入金额不得超过可用资金。无明确数量或价位时输出 null。严禁编造。
+- bandPlan：仅当 bandAction 明确包含**具体数量与触发价位**时输出，规则同 shortPlan。无明确数量或价位时输出 null。严禁编造。
+
+JSON 格式：
 {
   "signal": "4字标准标签",
   "analysis": "高密度量价技术面诊断（不超过50字）",
   "risk": "明确的破位或衰竭风险预测（不超过50字）",
   "bandAction": "锚定关键位的波段建议(含仓位指引,不超过40字)",
+  "bandPlan": {"side":"buy","qty":1000,"triggerPrice":6.15,"condition":"lte"},
   "shortAction": "可执行短期持仓建议(含具体数量,不超过40字)",
+  "shortPlan": {"side":"sell","qty":500,"triggerPrice":6.65,"condition":"gte"},
   "supportLevel": 6.12,
   "resistanceLevel": 6.85
 }`;
@@ -86,6 +104,7 @@ function buildUserMessage(
   session: SessionLabel,
   investmentStyle: string,
   totalPortfolioValue: number,
+  availableCash: number | null,
 ): string {
   const volume = formatVolumeForPrompt(snapshot.volume, session);
   const change =
@@ -137,6 +156,8 @@ function buildUserMessage(
     if (absPnl != null) msg += `, 浮动盈亏=${absPnl}元`;
     if (weightPct != null) msg += `, 占总仓位约${weightPct}%`;
     if (watchlistItem.actualPnl != null) msg += `, 已实现盈亏=${watchlistItem.actualPnl}元`;
+    // v2.10: available cash bounds buy-side structured orders.
+    if (availableCash != null) msg += `, 可用资金=${availableCash}元`;
   }
 
   return msg;
@@ -153,12 +174,55 @@ export class LlmAuthError extends Error {
   }
 }
 
+/**
+ * Validate an LLM-emitted structured order. Invalid plans are dropped (return
+ * null) WITHOUT failing the whole diagnosis — the text advice stays usable.
+ */
+function sanitizeActionPlan(
+  raw: unknown,
+  maxSellQty?: number,
+): ActionPlan | null {
+  if (raw == null || typeof raw !== 'object') {
+    return null;
+  }
+  const p = raw as Partial<ActionPlan>;
+  const { side } = p;
+  if (side !== 'sell' && side !== 'buy') {
+    return null;
+  }
+  if (typeof p.qty !== 'number' || !Number.isInteger(p.qty) || p.qty <= 0) {
+    return null;
+  }
+  if (
+    typeof p.triggerPrice !== 'number' ||
+    !Number.isFinite(p.triggerPrice) ||
+    p.triggerPrice <= 0
+  ) {
+    return null;
+  }
+  const { condition } = p;
+  const expected = side === 'sell' ? 'gte' : 'lte';
+  if (condition !== expected) {
+    return null;
+  }
+  if (side === 'sell' && maxSellQty != null && p.qty > maxSellQty) {
+    return null;
+  }
+  return {
+    side,
+    qty: p.qty,
+    triggerPrice: Math.round(p.triggerPrice * 1000) / 1000,
+    condition,
+  };
+}
+
 export async function runDiagnosis(
   snapshot: QuoteSnapshot,
   watchlistItem: WatchlistItem,
   config: AppConfig,
   alignedTime: string,
   session: SessionLabel,
+  availableCash?: number | null,
 ): Promise<{ ok: true; data: DiagnosisResult } | { ok: false; raw: string }> {
   const withPosition = hasPosition(watchlistItem);
   const base = config.baseUrl.replace(/\/$/, '');
@@ -182,7 +246,7 @@ export async function runDiagnosis(
       { role: 'system', content: systemContent },
       {
         role: 'user',
-        content: buildUserMessage(snapshot, watchlistItem, alignedTime, session, style, totalPortfolioValue),
+        content: buildUserMessage(snapshot, watchlistItem, alignedTime, session, style, totalPortfolioValue, availableCash ?? null),
       },
     ],
     response_format: { type: 'json_object' },
@@ -247,6 +311,14 @@ export async function runDiagnosis(
       typeof parsed.resistanceLevel !== 'number'
     ) {
       return { ok: false, raw };
+    }
+    // v2.10: sanitize structured orders. Invalid plans are silently dropped —
+    // they never fail the diagnosis, the text advice remains.
+    if (withPosition) {
+      parsed.shortPlan = sanitizeActionPlan(parsed.shortPlan, watchlistItem.positionQty);
+      parsed.bandPlan = sanitizeActionPlan(parsed.bandPlan, watchlistItem.positionQty);
+    } else {
+      parsed.buildPlan = sanitizeActionPlan(parsed.buildPlan);
     }
     return { ok: true, data: parsed };
   } catch {

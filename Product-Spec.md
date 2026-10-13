@@ -4,7 +4,7 @@
 
 **项目名称**：A股 AI 实时诊断工具（**AguMaster**）
 
-**一句话描述**：纯前端 Vue 看板（H5 + **Win11 桌面悬浮窗**），按用户所选 **交易所对齐刷新档位**（5 / 15 / 30 / 60 分钟）对 **全池最多 20 只自选**（A 股股票 + 场内 ETF/LOF 混排）拉取实时快照，结合可选持仓成本调用用户自带 Key 的大模型做短线诊断与操作建议（**v2.5** 起拆分为**短期持仓建议 + 波段建议**）；桌面模式以半透明小窗钉选展示 **1–5 只**，**调度仍全池刷新**；**Electron 桌面版**支持 **AI 自动关键位计算 + 价格突破预警 + 高风险 signal 弹窗通知**；**v2.4** 新增 **左侧可折叠分组侧边栏** + **三态刷新开关（关闭 / 正常 / 超频 30s）**。
+**一句话描述**：纯前端 Vue 看板（H5 + **Win11 桌面悬浮窗**），按用户所选 **交易所对齐刷新档位**（5 / 15 / 30 / 60 分钟）对 **全池最多 20 只自选**（A 股股票 + 场内 ETF/LOF 混排）拉取实时快照，结合可选持仓成本调用用户自带 Key 的大模型做短线诊断与操作建议（**v2.5** 起拆分为**短期持仓建议 + 波段建议**）；桌面模式以半透明小窗钉选展示 **1–5 只**，**调度仍全池刷新**；**Electron 桌面版**支持 **AI 自动关键位计算 + 价格突破预警 + 高风险 signal 弹窗通知**；**v2.4** 新增 **左侧可折叠分组侧边栏** + **三态刷新开关（关闭 / 正常 / 超频 30s）**；**v2.10** 新增 **AI 建议采纳与模拟自动成交**：AI 输出结构化操作指令，用户采纳后按触发价自动记账（持仓/成本/已实现盈亏/可用资金联动），免去真实交易后的手工重录。
 
 **目标**：
 - 在交易时段内自动、准时完成 **最多 20 只自选**的行情刷新与 AI 诊断
@@ -21,7 +21,7 @@
 - 年龄段：25–45 岁
 - 技术水平：能自行申请并配置大模型 API Key；能输入股票或场内基金代码
 - 使用场景：交易时段盘中盯盘（手机竖屏 / 桌面多列 / **Win11 半透明悬浮小窗 1–5 卡**）；非交易时段偶尔手动刷新复盘
-- 痛点：手动逐只复盘耗时长；股票与 ETF 分散在不同软件；希望固定节奏获得结构化 AI 诊断
+- 痛点：手动逐只复盘耗时长；股票与 ETF 分散在不同软件；希望固定节奏获得结构化 AI 诊断；真实交易后需逐只手工改持仓、成本与盈亏（**v2.10** 采纳式模拟成交自动记账解决）
 
 ## 核心功能
 
@@ -42,6 +42,9 @@
 - `symbolCode`：string，证券代码，支持 `600519` / `sh600519` / `510500` / `sh510500` / `159915` / `sz159915` 等格式
 - `positionQty`（可选）：number，持仓数量，**正整数**，单位：**股**（A 股）/ **份**（场内基金）
 - `costPrice`（可选）：number，持仓成本价，**正数**，单位：**元**，最多 **3 位小数**
+- `actualPnl`（可选，v2.9）：number，**已实现盈亏**（单位：**元**，可负），真实成交与快照成本口径不一致时的人工修正；v2.10 起由采纳式模拟成交自动累计（见功能 10）
+- `totalCapital`（可选，v2.9）：number，**总资金**（单位：**元**），用于计算每只证券的仓位权重；未配置时以全池持仓市值合计替代
+- `initialCapital`（可选，v2.10）：number，**初始资金**（单位：**元**），模拟账户本金；采纳买单前必须已配置
 
 **输出**：
 - LocalStorage / `agu.config.local.json` 持久化的配置对象 `{ baseUrl, apiKey, model, investmentStyle?, refreshFrequency, ... }`
@@ -114,6 +117,14 @@
 - API Key、baseUrl、model、refreshFrequency、钉选列表、自选列表以 **明文** 存入 LocalStorage 或本地配置文件
 - 支持删除自选（卡片删除按钮）
 - 未配置 apiKey 时，允许添加自选与查看上次诊断，自动/手动 AI 跳过并 Banner 提示
+
+#### 已实现盈亏与模拟资金账户（v2.9 / v2.10）
+
+- **已实现盈亏 `actualPnl`**：卡片持仓行展示「已实现 +X 元 / −X 元」；可在持仓编辑面板手工录入（真实成交与模拟口径有出入时修正）；v2.10 起模拟成交自动累计（见功能 10），手工录入与自动累计并存，后写覆盖
+- **总资金 `totalCapital`**：配置面板录入；卡片持仓行展示「仓位 X%」（= 持仓市值 ÷ totalCapital）；未配置时不展示仓位
+- **模拟资金账户（v2.10）**：
+  - 本金 `initialCapital` 在配置面板录入；**可用资金不单独持久化**，由成交流水推导：`可用资金 = initialCapital + Σ卖出回款 − Σ买入支出`
+  - 成交流水见功能 10 的 `Trade` 类型；删除证券**不**回滚其历史流水与资金
 
 #### 自定义分组与侧边栏（v2.4）
 
@@ -315,7 +326,9 @@
   "analysis": "放量滞涨，上影压制明显",
   "risk": "30分钟内回落风险偏高",
   "shortAction": "现价高于成本约2%，可减半仓锁定利润",
+  "shortPlan": { "side": "sell", "qty": 500, "triggerPrice": 6.65, "condition": "gte" },
   "bandAction": "接近阻力位6.85，未突破前不宜追高，回落至6.12支撑附近可分批关注",
+  "bandPlan": { "side": "buy", "qty": 1000, "triggerPrice": 6.15, "condition": "lte" },
   "supportLevel": 6.12,
   "resistanceLevel": 6.85
 }
@@ -328,6 +341,7 @@
   "analysis": "缩量回踩支撑位，均线附近整理",
   "risk": "若放量跌破6.12支撑，短线走弱确认",
   "buildPositionAdvice": "现价贴近支撑位6.12附近，可等待放量企稳后轻仓试多，止损设于6.00下方",
+  "buildPlan": { "side": "buy", "qty": 1000, "triggerPrice": 6.15, "condition": "lte" },
   "supportLevel": 6.12,
   "resistanceLevel": 6.85
 }
@@ -342,7 +356,14 @@
 - `buildPositionAdvice`：**仅当该证券未配置持仓时必填**（v2.6，替代 v2.5 的 bandAction）；**≤ 30 字**；**必须锚定 `supportLevel` / `resistanceLevel`**，给出建仓方向与建议价位（如「可等待放量企稳支撑位后轻仓试多」「接近阻力位暂不建议追高建仓」）；禁止脱离关键位凭空给出买卖建议
 - `supportLevel`：**必填**，技术支撑位
 - `resistanceLevel`：**必填**，技术压力位
-- **互斥规则**：`shortAction` / `bandAction` 与 `buildPositionAdvice` **互斥**，一个 Prompt 输出中不可能同时出现。有持仓 → 输出前两者；无持仓 → 输出后者。
+  - **互斥规则**：`shortAction` / `bandAction` 与 `buildPositionAdvice` **互斥**，一个 Prompt 输出中不可能同时出现。有持仓 → 输出前两者；无持仓 → 输出后者。
+- `shortPlan` / `bandPlan` / `buildPlan`（**v2.10 新增，均可选**）：与对应文本建议同生命周期的**结构化操作指令**，结构 `{ side, qty, triggerPrice, condition }`：
+  - `side`：`'sell'`（减仓/清仓）| `'buy'`（加仓/建仓）
+  - `qty`：正整数，单位股/份；**卖出时 Prompt 约束 `qty ≤ positionQty`**；买入时 Prompt 约束 `qty × triggerPrice ≤ 可用资金`（注入 User Message）
+  - `triggerPrice`：正数，元，最多 3 位小数
+  - `condition`：`'gte'`（价格 ≥ 触发价，卖出方向）| `'lte'`（价格 ≤ 触发价，买入方向）
+  - **仅在建议文本明确给出具体数量与触发价位时输出，禁止编造**；无明确价位时输出 `null` 或省略
+  - **plan 非法不影响文本建议**：plan 缺失/非法（`qty ≤ 0`、`triggerPrice ≤ 0`、`side`/`condition` 非法、卖出 `qty` 超持仓）时丢弃 plan、保留对应文本，**不**视为解析失败、**不**走 Raw 分支
 
 **业务规则**：
 - 最多 20 只证券 **串行**调用 LLM（间隔 ≥ 300ms），避免 429
@@ -359,9 +380,11 @@
 - `signal` 配色规则见 UI-Spec；卡片操作建议展示规则（v2.6）：
   - **有持仓**：Content 区 Risk 行下方依次展示「波段建议：{bandAction}」「短期建议：{shortAction}」
   - **无持仓（观望）**：Content 区 Risk 行下方展示「建仓建议：{buildPositionAdvice}」，不渲染 bandAction / shortAction 行
-  - 两套展示**互斥**，取决于该证券是否配置持仓
+  - 两套展示**互斥**，取决于该证券是否配置持仓；建议行尾的「采纳 / 不采纳」按钮见功能 10（v2.10）
 - **关键位自动填充（v2.2）**：LLM 返回的 `supportLevel` / `resistanceLevel` 在解析成功后自动写入 `WatchlistItem.keyLevels`（分别对应 `type: "support"` 和 `type: "resistance"`），受偏差保护规则约束（见功能 8）
 - 诊断结果与指纹一并写入 LocalStorage（`agu_diagnosis_cache`）
+- **v2.10 结构化指令**：诊断缓存同时保存 plans；指纹命中沿用缓存时 plans 一并沿用（同一快照下的指令不重复生成、保持稳定，避免用户采纳后又漂移）
+- **v2.10 可用资金注入**：有持仓且配置了 `initialCapital` 时，User Message 追加可用资金，供 AI 约束买入数量
 
 **异常处理**：
 - 指纹命中缓存：跳过 LLM，不消耗 Token；全池命中时 Toast「行情未变，已沿用缓存诊断」
@@ -568,6 +591,7 @@
 | **AI Signal 高风险预警** | `alertSettings.signalAlert` | 本次诊断 `signal` 命中固定高风险词库：`止损` / `逢高减仓` / `减仓` / `清仓` | **高** |
 | **API Key 鉴权失败** | `alertSettings.authErrorAlert` | LLM 调用返回 HTTP 401 / 429，本轮刷新被中止 | **中** |
 | **行情全部失败** | `alertSettings.quoteErrorAlert` | 本轮刷新中所有证券行情均拉取失败（主源 + 备源） | **低** |
+| **模拟成交（v2.10）** | `alertSettings.tradeAlert` | 采纳的待触发订单成交，或触发校验失败被拒绝 | **中** |
 
 - `alertSettings.enabled` 为总开关；`false` 时所有通知静默
 - 各类通知的独立开关仅在 `alertSettings.enabled = true` 时生效
@@ -623,6 +647,7 @@
   - ✅ AI 高风险信号预警
   - ✅ API Key 异常
   - ✅ 行情获取异常
+  - ✅ 模拟成交（v2.10）
 - 各开关即时生效（emit `save`），非 Modal
 
 #### 投资风格配置（v2.7）
@@ -742,6 +767,124 @@ interface TrackingEntry {
 
 ---
 
+### 功能 10：AI 建议采纳与模拟自动成交（v2.10）
+
+**功能描述**：AI 诊断输出结构化操作指令（`shortPlan` / `bandPlan` / `buildPlan`）后，对应建议行展示「采纳 / 不采纳」按钮。用户采纳即生成**待触发订单**；当行情刷新检测到价格满足触发条件时，按**触发价**自动记账：更新持仓数量与成本价、累计已实现盈亏、扣减/回补可用资金，并写入成交流水。**本功能为模拟盘记账，不连接券商、不真实下单。**
+
+**类型定义**：
+
+```
+// 结构化操作指令（LLM 输出，v2.10）
+interface ActionPlan {
+  side: 'sell' | 'buy';
+  qty: number;           // 正整数，股/份
+  triggerPrice: number;  // 正数，元，最多 3 位小数
+  condition: 'gte' | 'lte';
+}
+
+// 待触发订单（采纳后生成）
+interface PendingOrder {
+  id: string;
+  code: string;
+  name: string;
+  plan: ActionPlan;
+  planType: 'short' | 'band' | 'build';
+  createdAt: string;              // 挂单时间
+  status: 'pending' | 'filled' | 'cancelled' | 'rejected';
+  filledAt?: string;
+}
+
+// 成交流水（模拟账户可用资金与已实现盈亏的事实源）
+interface Trade {
+  id: string;
+  code: string;
+  name: string;
+  side: 'buy' | 'sell';
+  qty: number;
+  price: number;          // 成交价（自动成交 = 触发价）
+  amount: number;         // qty × price
+  realizedPnl?: number;   // 仅卖出有：(price − costPrice) × qty
+  source: 'auto' | 'manual';
+  createdAt: string;
+}
+```
+
+**输入**：
+- AI 诊断结果中的结构化指令（`shortPlan` / `bandPlan` / `buildPlan`）
+- 该证券当前 `positionQty`、`costPrice`、`actualPnl`
+- 模拟账户 `initialCapital` 与可用资金（由 `agu_trades` 流水推导）
+- 每次行情刷新后的快照 `price`（触发检测）
+
+**输出**：
+- `PendingOrder`（LocalStorage `agu_pending_orders`）
+- 成交后的 `Trade` 流水（LocalStorage `agu_trades`）与联动更新后的 `WatchlistItem`（positionQty / costPrice / actualPnl）
+- 可用资金与成交流水的展示
+
+**业务规则**：
+
+#### 采纳与挂单
+
+- **按钮位置**：有持仓卡片——「短期建议」行尾与「波段建议」行尾各展示「采纳 ✓ / 不采纳 ✗」（仅当对应 plan 存在）；无持仓卡片——「建仓建议」行尾同（仅当 `buildPlan` 存在）。**悬浮窗（widgetMode）只读，不展示按钮**
+- **不采纳**：按钮消失（仅本次诊断），不产生订单；新一轮诊断重新给出建议与按钮
+- **采纳校验（挂单时即校验，不通过则 Toast 拒绝，不生成订单）**：
+  - 卖出：`qty ≤ positionQty`，否则 Toast「卖出数量超过持仓」
+  - 买入：`qty × triggerPrice ≤ 可用资金`；未配置 `initialCapital` 时 Toast「请先在配置中设置初始资金」
+- **待触发订单管理**：配置面板「模拟账户」区域列出全部订单（证券、方向、数量、触发价），pending 订单可**撤销**（status → cancelled）；**卡片建议行「已挂单」chip 可点击直接撤销**（v2.10.1，卡片内取消采纳入口）
+- **订单仅当日有效（v2.10.1 修订，推翻「跨日有效」）**：跨自然日自动撤销非当日挂单（`status → cancelled` + Toast 提示）——**重新开盘不继承前一日挂单**
+- 采纳后对应建议行按钮态变为「已挂单」（点击可撤销）；撤销后恢复可采纳
+
+#### 触发与成交
+
+- **检测时机**：主调度对齐刷新、单卡 ↻、超频 30s 轮询——任何一次行情快照更新后立即检查该证券的 pending 订单
+- **穿透判定（复用功能 8 关键位穿透逻辑）**：记录上次检测价 `lastPrice`；卖出（`condition: gte`）当 `lastPrice < triggerPrice ≤ price` 时触发；买入（`lte`）当 `lastPrice > triggerPrice ≥ price` 时触发；首笔快照（无 `lastPrice`）已满足条件时直接触发（覆盖开盘跳空越价场景）
+- **成交价 = 触发价**（v2.10 定稿；**不模拟手续费**）
+- **成交时二次校验**：期间持仓/资金可能被其他订单改变，超限则 `status → rejected` 并 Toast，**不**成交
+- 成交：`status → filled`，记录 `filledAt`；卡片 Toast「{证券} 已成交：{买入/卖出} {qty}{股/份} @ {triggerPrice}」；Electron 桌面版可选弹成交通知（见功能 8）
+
+#### 记账规则（成交后自动更新）
+
+- **卖出成交**：
+  - `positionQty -= qty`；减至 0 时**清空** `positionQty` 与 `costPrice`（该证券转为无持仓观望态，下次诊断输出建仓建议）
+  - 剩余持仓 `costPrice` **不变**（A 股惯例，卖出不摊薄剩余持仓成本）
+  - `actualPnl += (triggerPrice − costPrice) × qty`（保留 2 位小数；在既有手工值上累加）
+  - 可用资金 += `triggerPrice × qty`
+  - 写入 `Trade`（`side: 'sell'`，`source: 'auto'`，含 `realizedPnl`）
+- **买入成交**：
+  - 已有持仓（加仓）：`costPrice = (旧cost × 旧qty + triggerPrice × qty) ÷ (旧qty + qty)`，保留 3 位小数；`positionQty += qty`
+  - 无持仓（建仓）：`costPrice = triggerPrice`，`positionQty = qty`（该证券转为有持仓态，下次诊断输出短期/波段建议）
+  - 可用资金 −= `triggerPrice × qty`
+  - 写入 `Trade`（`side: 'buy'`，`source: 'auto'`）
+- **与手工编辑的关系**：卡片持仓编辑面板仍是**修正入口**（覆盖式，不写流水）；自动成交始终以「当前字段值 + 流水推导的可用资金」为基准计算，先到先算，用户可事后手工修正
+
+#### 可用资金与流水展示
+
+- 配置面板「模拟账户」区域：初始资金、**可用资金**（实时推导）、累计已实现盈亏（Σ 卖出 `realizedPnl`）、成交流水列表（时间倒序，最近 50 条）
+- 卡片持仓行：已实现盈亏展示为 `actualPnl`（自动累计 + 手工修正合并后的值）
+
+**异常处理**：
+- plan 非法（见功能 4）：不渲染采纳按钮，不影响文本建议
+- 行情失败：不检测、不成交；订单保持 pending
+- 成交后同一订单防重复成交：`status` 状态机保证仅一次
+- LocalStorage 不可用：与现有存储异常处理一致，挂单操作 Toast 阻断
+
+**影响范围**：
+
+| 模块 | 改动 |
+|------|------|
+| `types/index.ts` | 新增 `ActionPlan`、`PendingOrder`、`Trade`；`AppConfig.initialCapital`；`AlertSettings.tradeAlert`；`DiagnosisResult` 增加三个 plan 字段 |
+| `services/llmDiagnosis.ts` | Prompt 输出契约扩展（结构化指令 + 可用资金注入）；解析层 plan 校验与容错 |
+| `composables/useAppState.ts` | 采纳/撤销动作；订单状态机与触发检测；记账逻辑（持仓/成本/盈亏/流水）；可用资金推导 |
+| `components/StockCard.vue` | 建议行采纳/不采纳按钮；「已挂单」态；已实现盈亏自动值展示 |
+| `components/ConfigPanel.vue` | 模拟账户区域：初始资金录入、可用资金、订单列表、流水列表 |
+| `utils/storage.ts` | 新增 `agu_pending_orders`、`agu_trades` 读写 |
+| 桌面版 | 成交通知弹窗（`AlertType: 'trade'`，走既有 `agu:send-alert`） |
+
+**优先级**：中
+
+**状态**：已开发
+
+---
+
 ### 高优先级（必须有）
 1. **资产配置与 Key 管理** — 无配置则无法运行
 2. **行情拉取（JSONP）** — 一切诊断的数据基础
@@ -756,6 +899,7 @@ interface TrackingEntry {
 3. **诊断结果 LocalStorage 持久化** — 刷新不丢上次结果
 4. **Signal 关键词配色** — 快速扫盘
 5. **组合汇总与双层自选池（v2.8）** — 追踪池不限数量 + 多组合加权汇总
+6. **AI 建议采纳与模拟自动成交（v2.10）** — 结构化指令采纳 + 触发价自动记账 + 模拟资金账户
 
 ### 低优先级（可以有）
 1. **并行 LLM 请求** — v1 串行更稳
@@ -779,7 +923,7 @@ interface TrackingEntry {
 
 **输入**：System Prompt + User Message（含快照 JSON、对齐时刻；有持仓时含成本与盈亏率）
 
-**输出**：`{ signal, analysis, risk, bandAction [, shortAction] }` JSON
+**输出**：`{ signal, analysis, risk, bandAction [, shortAction] [, shortPlan / bandPlan / buildPlan] }` JSON（v2.10 起含可选结构化操作指令）
 
 **示例**：
 ```
@@ -988,6 +1132,26 @@ AI: {"signal":"持股观望","analysis":"缩量震荡","risk":"跟踪误差放�
 - **变更**：无持仓时不再输出 `bandAction`，改为输出 `buildPositionAdvice`（建仓建议），同样锚定关键位；有持仓时 `bandAction` 仍保留。
 - **ADR-008 第 3、5 条作废**；第 1、2、4 条保留。
 
+### 架构决策：AI 建议采纳与模拟自动成交（ADR-009，v2.10）
+
+**背景**：用户录入持仓、成本、已实现盈亏、总资金后，每次真实交易都要逐只手工改数；希望 AI 给出的操作建议能一键「采纳」，价格到位后自动更新持仓、盈亏与可用资金。
+
+**冲突**：
+- **文本建议不可执行**：`shortAction` / `bandAction` / `buildPositionAdvice` 是 ≤30 字自由文本，程序无法可靠解析数量与价位，直接采纳会错单
+- **无资金账户**：现有模型只有每只证券的持仓与成本，无初始资金/可用资金/成交流水，「可用资金变更」无从计算
+- **手工编辑并存**：卡片持仓编辑是既有修正入口，自动记账与其并写同一批字段，账目可能互相覆盖
+- **刷新粒度非实时**：行情只在刷新档位或超频 30s 轮询时更新，「价格到 2 块」只能在这些时刻被检测
+
+**决策**：
+1. **结构化指令与文本并存**：LLM 在文本建议之外**可选**输出 `ActionPlan`（side / qty / triggerPrice / condition），仅当建议明确含数量与价位时输出，禁止编造；plan 非法仅丢弃 plan、保留文本，不触发解析失败
+2. **完整模拟账户**：用户录入 `initialCapital`；可用资金 = 本金 + Σ卖出回款 − Σ买入支出（由 `Trade` 流水推导，不单独持久化）
+3. **买卖双向**：减仓/清仓/加仓/建仓均可采纳；卖出 qty 不得超持仓，买入金额不得超可用资金（挂单与成交双重校验）
+4. **触发价记账 + 穿透判定**：成交价 = 触发价，不模拟手续费；触发检测复用关键位穿透逻辑，覆盖开盘跳空越价
+5. **手工编辑为修正入口**：自动成交写流水并更新字段；手工编辑覆盖字段但不写流水，二者以「当前值」为计算基准，先到先算
+6. **模拟盘免责**：不连接券商、不真实下单，Footer 合规声明覆盖 ActionPlan
+
+**约束**（v2.10.1 修订）：订单**仅当日有效**，跨自然日自动撤销（重新开盘不继承前一日挂单）；`bandPlan`（波段指令）与 `shortPlan`（短期指令）可并存，逐单独立校验，不做订单间资金锁定（先成交者先占资金）。
+
 ### 架构决策：Win11 桌面悬浮与全池刷新（ADR-006）
 
 **背景**：用户希望 AguMaster 以半透明小窗悬浮于 Win11 桌面，展示钉选 1–4 只证券的**完整诊断信息**，同时保留现有最多 10 只自选与对齐调度能力。
@@ -1048,6 +1212,13 @@ AI: {"signal":"持股观望","analysis":"缩量震荡","risk":"跟踪误差放�
 - **alertSettings**：桌面通知总开关与各类预警的独立启用/禁用配置
 - **固定高风险词库**：`止损` / `逢高减仓` / `减仓` / `清仓` —— 出现时触发 signal 弹窗
 - **BrowserWindow 弹窗**：Electron 主进程创建的独立通知窗口，区别于悬浮窗和完整看板主窗
+- **结构化操作指令（ActionPlan）**：LLM 输出的可执行操作计划 `{ side, qty, triggerPrice, condition }`，对应 shortPlan / bandPlan / buildPlan，仅当建议文本含明确数量与价位时输出
+- **采纳**：用户点击建议行「采纳」按钮，将 ActionPlan 转为待触发订单
+- **待触发订单（PendingOrder）**：采纳后、成交前挂起的条件单；**仅当日有效**（v2.10.1），可撤销，跨自然日自动撤销
+- **触发价**：订单成交的价格条件；卖出为「价格 ≥ 触发价」，买入为「价格 ≤ 触发价」
+- **模拟自动成交**：行情刷新检测到触发条件后，按触发价自动记账（持仓/成本/盈亏/资金），不连接券商
+- **模拟资金账户**：`initialCapital` + 成交流水推导的可用资金模型（v2.10）
+- **成交流水（Trade）**：每笔自动/手工成交的记账记录，可用资金与已实现盈亏的事实源
 
 ### 参考资料
 - UI 视觉与交互规范：[UI-Spec.md](./UI-Spec.md)
@@ -1058,8 +1229,8 @@ AI: {"signal":"持股观望","analysis":"缩量震荡","risk":"跟踪误差放�
 
 ---
 
-**文档版本**：2.8.6
+**文档版本**：2.10.1
 
-**最后更新**：2026-07-01
+**最后更新**：2026-09-11
 
-**下次更新计划**：场外基金支持；macOS 桌面包
+**下次更新计划**：场外基金支持；macOS 桌面包；模拟成交手续费；成交通知细化

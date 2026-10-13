@@ -7,12 +7,13 @@ import { BrowserWindow } from 'electron';
  * (Not imported cross-tree to avoid coupling desktop's rootDir to web/.)
  */
 export interface AlertPayload {
-  type: 'price' | 'signal' | 'auth' | 'quote';
+  type: 'price' | 'signal' | 'auth' | 'quote' | 'trade';
   code: string;
   name: string;
   signal?: string;
   keyLevel?: { type: string; label: string; price: number };
   currentPrice?: number;
+  tradeMsg?: string;
 }
 
 const ALERT_WINDOW_WIDTH = 360;
@@ -29,7 +30,7 @@ function escapeHtml(s: string): string {
 function buildAlertHtml(alerts: AlertPayload[]): string {
   const items = alerts
     .sort((a, b) => {
-      const order = { price: 0, signal: 1, auth: 2, quote: 3 } as const;
+      const order = { price: 0, signal: 1, trade: 2, auth: 3, quote: 4 } as const;
       return (order[a.type] ?? 9) - (order[b.type] ?? 9);
     })
     .map((a) => {
@@ -46,6 +47,13 @@ function buildAlertHtml(alerts: AlertPayload[]): string {
           <span class="dot signal-dot"></span>
           <span class="alert-name">${escapeHtml(a.name)}</span>
           <span class="alert-detail">· ${escapeHtml(a.signal ?? '')}</span>
+        </div>`;
+      }
+      if (a.type === 'trade') {
+        return `<div class="alert-item alert-trade">
+          <span class="dot trade-dot"></span>
+          <span class="alert-name">${escapeHtml(a.name)}</span>
+          <span class="alert-detail">${escapeHtml(a.tradeMsg ?? '')}</span>
         </div>`;
       }
       if (a.type === 'auth') {
@@ -75,6 +83,7 @@ function buildAlertHtml(alerts: AlertPayload[]): string {
     .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
     .price-dot{background:#faad14;}
     .signal-dot{background:#ff4d4f;}
+    .trade-dot{background:#1677ff;}
     .error-dot{background:#ff7875;}
     .alert-name{font-weight:600;white-space:nowrap;}
     .alert-detail{color:#bfbfbf;}

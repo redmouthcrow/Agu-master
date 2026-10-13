@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { AppConfig, RefreshFrequency, WatchlistItem } from '../types';
+import type { AppConfig, PendingOrder, RefreshFrequency, Trade, WatchlistItem } from '../types';
 import { maskApiKey } from '../utils/display';
 import { parsePositionInputs } from '../utils/position';
 import { normalizeWatchlistSymbol } from '../utils/stockCode';
@@ -22,6 +22,11 @@ const props = defineProps<{
   calendarLabel: string;
   watchlistCount: number;
   tryAddSymbol: (code: string, positionQty?: number, costPrice?: number) => boolean;
+  /** v2.10: simulated account summary */
+  availableCash?: number;
+  realizedTotal?: number;
+  pendingOrders?: PendingOrder[];
+  trades?: Trade[];
 }>();
 
 const emit = defineEmits<{
@@ -34,7 +39,28 @@ const emit = defineEmits<{
   toast: [message: string];
   exportBackup: [];
   removeAssignment: [code: string, portfolioId: string];
+  cancelOrder: [orderId: string];
 }>();
+
+function formatMoney(v: number | undefined): string {
+  return v == null ? '—' : String(Math.round(v * 100) / 100);
+}
+
+function sideLabel(side: 'sell' | 'buy'): string {
+  return side === 'sell' ? t('trade.sell') : t('trade.buy');
+}
+
+function orderUnitLabel(order: PendingOrder): string {
+  const item = props.config.watchlist.find((w) => w.code === order.code);
+  return item?.instrumentType === 'fund_etf' ? t('common.fundUnit') : t('common.stockUnit');
+}
+
+function orderStatusLabel(status: string): string {
+  if (status === 'filled') return t('config.orderFilled');
+  if (status === 'cancelled') return t('config.orderCancelled');
+  if (status === 'rejected') return t('config.orderRejected');
+  return '';
+}
 
 // v2.8 portfolio asset management
 const selectedPfId = ref('');
@@ -240,6 +266,58 @@ function onAlwaysOnTopChange(e: Event) {
           @change="emit('save', { totalCapital: Number(($event.target as HTMLInputElement).value) || undefined })"
         />
       </label>
+      <!-- v2.10 simulated account: capital, pending orders, trade ledger -->
+      <section class="sim-account">
+        <h3 class="settings-heading">{{ t('config.simAccountSection') }}</h3>
+        <label class="field">
+          <span>{{ t('config.initialCapital') }}</span>
+          <input
+            type="number"
+            min="0"
+            step="1000"
+            :value="config.initialCapital ?? ''"
+            :placeholder="t('config.initialCapitalPlaceholder')"
+            @change="emit('save', { initialCapital: Number(($event.target as HTMLInputElement).value) || undefined })"
+          />
+        </label>
+        <p class="sim-summary">
+          <span>{{ t('config.availableCash') }}：<b>{{ formatMoney(availableCash) }}</b> 元</span>
+          <span>
+            {{ t('config.realizedPnl') }}：<b :class="(realizedTotal ?? 0) >= 0 ? 'pnl-up' : 'pnl-down'">
+              {{ (realizedTotal ?? 0) >= 0 ? '+' : '' }}{{ formatMoney(realizedTotal) }}</b> 元
+          </span>
+        </p>
+        <h4 class="section-subtitle">{{ t('config.pendingOrders') }}</h4>
+        <div v-if="(pendingOrders ?? []).length === 0" class="field-hint">{{ t('config.noOrders') }}</div>
+        <div v-else class="order-list">
+          <div v-for="o in pendingOrders" :key="o.id" class="order-row">
+            <span class="order-name">{{ o.name || o.code }}</span>
+            <span class="order-detail">
+              {{ sideLabel(o.plan.side) }} {{ o.plan.qty }}{{ orderUnitLabel(o) }} @ {{ o.plan.triggerPrice.toFixed(3) }}
+            </span>
+            <button
+              v-if="o.status === 'pending'"
+              type="button"
+              class="btn-link btn-link-sm"
+              @click="emit('cancelOrder', o.id)"
+            >{{ t('config.cancelOrder') }}</button>
+            <span v-else class="order-status">{{ orderStatusLabel(o.status) }}</span>
+          </div>
+        </div>
+        <h4 class="section-subtitle">{{ t('config.tradesList') }}</h4>
+        <div v-if="(trades ?? []).length === 0" class="field-hint">{{ t('config.noTrades') }}</div>
+        <div v-else class="trade-list">
+          <div v-for="tr in [...(trades ?? [])].reverse().slice(0, 50)" :key="tr.id" class="trade-row">
+            <span class="order-name">{{ tr.name || tr.code }}</span>
+            <span class="order-detail">{{ sideLabel(tr.side) }} {{ tr.qty }} @ {{ tr.price.toFixed(3) }}</span>
+            <span
+              v-if="tr.realizedPnl != null"
+              :class="tr.realizedPnl >= 0 ? 'pnl-up' : 'pnl-down'"
+            >{{ tr.realizedPnl >= 0 ? '+' : '' }}{{ tr.realizedPnl }}</span>
+            <span class="trade-time">{{ tr.createdAt.slice(5, 16).replace('T', ' ') }}</span>
+          </div>
+        </div>
+      </section>
       <label class="field">
         <span>{{ t('config.refreshFrequency') }}</span>
         <select
@@ -394,6 +472,14 @@ function onAlwaysOnTopChange(e: Event) {
               />
               <span>{{ t('config.alertQuoteError') }}</span>
             </label>
+            <label class="pin-item">
+              <input
+                type="checkbox"
+                :checked="(config.alertSettings?.tradeAlert) !== false"
+                @change="emit('alertSettingsChange', { tradeAlert: ($event.target as HTMLInputElement).checked })"
+              />
+              <span>{{ t('config.alertTrade') }}</span>
+            </label>
           </template>
         </section>
         <!-- v2.8 portfolio asset management -->
@@ -433,4 +519,16 @@ function onAlwaysOnTopChange(e: Event) {
 .edit-row { display: flex; align-items: center; gap: 4px; }
 .edit-input { flex: 1; min-width: 0; min-height: 26px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
 .edit-input-narrow { width: 52px; min-height: 26px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
+
+/* v2.10 simulated account */
+.sim-account { margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 10px; }
+.sim-summary { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; margin: 4px 0 8px; color: var(--text); }
+.order-list, .trade-list { max-height: 180px; overflow-y: auto; margin-bottom: 6px; }
+.order-row, .trade-row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+.order-name { font-weight: 600; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.order-detail { color: var(--text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.order-status { font-size: 11px; color: #8c8c8c; }
+.trade-time { font-size: 11px; color: #8c8c8c; white-space: nowrap; }
+.pnl-up { color: #16c784; }
+.pnl-down { color: #ea3943; }
 </style>

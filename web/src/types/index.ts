@@ -8,7 +8,7 @@ export type RefreshFrequency = 5 | 15 | 30 | 60;
 export type RefreshMode = 'off' | 'normal' | 'overclock';
 export type KeyLevelType = 'support' | 'resistance' | 'custom';
 export type KeyLevelSource = 'ai' | 'manual';
-export type AlertType = 'price' | 'signal' | 'auth' | 'quote';
+export type AlertType = 'price' | 'signal' | 'auth' | 'quote' | 'trade';
 
 export interface KeyLevel {
   price: number;
@@ -24,6 +24,8 @@ export interface AlertSettings {
   signalAlert: boolean;
   authErrorAlert: boolean;
   quoteErrorAlert: boolean;
+  /** v2.10: adopted pending order filled / rejected */
+  tradeAlert: boolean;
 }
 
 export interface AlertPayload {
@@ -33,6 +35,8 @@ export interface AlertPayload {
   signal?: string;
   keyLevel?: KeyLevel;
   currentPrice?: number;
+  /** v2.10: filled trade description, e.g. "卖出 1000股 @ 6.650" */
+  tradeMsg?: string;
 }
 
 export const HIGH_RISK_SIGNALS: ReadonlySet<string> = new Set([
@@ -69,6 +73,42 @@ export interface PortfolioAssignment {
 
 export const DEFAULT_GROUP_ID = '__default__';
 
+/** v2.10: structured action plan output by the LLM alongside text advice. */
+export interface ActionPlan {
+  side: 'sell' | 'buy';
+  qty: number;
+  triggerPrice: number;
+  condition: 'gte' | 'lte';
+}
+
+export type PlanType = 'short' | 'band' | 'build';
+
+/** v2.10: pending order created when the user adopts an ActionPlan. */
+export interface PendingOrder {
+  id: string;
+  code: string;
+  name: string;
+  plan: ActionPlan;
+  planType: PlanType;
+  createdAt: string;
+  status: 'pending' | 'filled' | 'cancelled' | 'rejected';
+  filledAt?: string;
+}
+
+/** v2.10: trade ledger entry — source of truth for available cash. */
+export interface Trade {
+  id: string;
+  code: string;
+  name: string;
+  side: 'buy' | 'sell';
+  qty: number;
+  price: number;
+  amount: number;
+  realizedPnl?: number;
+  source: 'auto' | 'manual';
+  createdAt: string;
+}
+
 export interface WidgetWindowBounds {
   x: number;
   y: number;
@@ -102,6 +142,8 @@ export interface AppConfig {
   investmentStyle?: 'aggressive' | 'neutral' | 'conservative';
   /** v2.9: User-specified total portfolio capital (元). If set, overrides computed total for position weighting. */
   totalCapital?: number;
+  /** v2.10: Simulated account principal (元). Required before adopting buy plans. */
+  initialCapital?: number;
   watchlist: WatchlistItem[];
   groups?: UserGroup[];
   /** v2.8 portfolio tracking */
@@ -141,6 +183,12 @@ export interface DiagnosisResult {
   shortAction?: string;
   /** 建仓建议（v2.6 新增；仅当未配置持仓时由 LLM 输出，须锚定 supportLevel/resistanceLevel）。 */
   buildPositionAdvice?: string;
+  /** v2.10: structured order corresponding to shortAction (with position only). */
+  shortPlan?: ActionPlan | null;
+  /** v2.10: structured order corresponding to bandAction (with position only). */
+  bandPlan?: ActionPlan | null;
+  /** v2.10: structured order corresponding to buildPositionAdvice (no position). */
+  buildPlan?: ActionPlan | null;
   supportLevel?: number;
   resistanceLevel?: number;
 }

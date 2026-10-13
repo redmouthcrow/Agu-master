@@ -32,6 +32,13 @@ const {
   showToast,
   updateSymbolPosition,
   removeSymbol,
+  adoptPlan,
+  cancelOrder,
+  cancelOrderForPlan,
+  pendingOrders,
+  trades,
+  availableCash,
+  realizedTotalPnl,
   runRefresh,
   runRefreshSymbol,
   initCalendar,
@@ -165,6 +172,10 @@ onMounted(() => {
         :is-desktop="isDesktop"
         :calendar-label="calendarLabel"
         :watchlist-count="watchlistCount"
+        :available-cash="availableCash"
+        :realized-total="realizedTotalPnl"
+        :pending-orders="pendingOrders"
+        :trades="trades"
         v-model:stock-input="stockInput"
         :try-add-symbol="addSymbol"
         @toggle="configOpen = !configOpen"
@@ -175,6 +186,7 @@ onMounted(() => {
         @refresh="runRefresh(true)"
         @sync-calendar="initCalendar(true)"
         @export-backup="exportUserBackup"
+        @cancel-order="cancelOrder"
       />
 
       <main class="main">
@@ -233,6 +245,7 @@ onMounted(() => {
                 :card="card"
                 :groups="groups"
                 :total-capital="config.totalCapital"
+                :pending-orders="pendingOrders"
                 @remove="removeSymbol"
                 @refresh="runRefreshSymbol"
                 @update-position="updateSymbolPosition"
@@ -241,6 +254,8 @@ onMounted(() => {
                 @toggle-key-levels-lock="(code: string) => { toggleKeyLevelsLock(code); }"
                 @cycle-refresh-mode="(code: string) => { cycleRefreshMode(code); }"
                 @set-group="(code: string, groupId: string | undefined) => { setSecurityGroup(code, groupId); }"
+                @adopt-plan="(code: string, planType: 'short' | 'band' | 'build') => { adoptPlan(code, planType); }"
+                @cancel-plan="(code: string, planType: 'short' | 'band' | 'build') => { cancelOrderForPlan(code, planType); }"
                 @toast="showToast"
               />
             </div>

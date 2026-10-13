@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
 import type {
+  ActionPlan,
   AlertPayload,
   AlertSettings,
   AppConfig,
@@ -7,10 +8,13 @@ import type {
   DiagnosisCacheEntry,
   DiagnosisResult,
   LiveSyncPayload,
+  PendingOrder,
+  PlanType,
   QuoteSnapshot,
   RefreshMode,
   SessionLabel,
   StockCardState,
+  Trade,
   WatchlistItem,
 } from '../types';
 import { MAX_OVERCLOCK, MAX_SECURITIES } from '../types';
@@ -65,6 +69,8 @@ import {
 const CONFIG_KEY = 'config';
 const DIAG_KEY = 'diagnosis_cache';
 const LIVE_SYNC_KEY = 'live_sync';
+const PENDING_ORDERS_KEY = 'pending_orders';
+const TRADES_KEY = 'trades';
 const STORAGE_PREFIX = 'agu_';
 
 /** Delay between sequential AI diagnosis calls (avoid hammering the LLM). */
@@ -79,6 +85,242 @@ let lastPricesForBreakthrough = new Map<string, number>();
 let highFreqTimer: ReturnType<typeof setTimeout> | null = null;
 const HIGH_FREQ_INTERVAL_MS = 30_000;
 let authAlertSentThisRound = false;
+
+// --- v2.10 simulated account & adopted orders ---
+const pendingOrders = ref<PendingOrder[]>([]);
+const trades = ref<Trade[]>([]);
+/** Last observed price per symbol, for order trigger penetration detection. */
+const orderLastPrices = new Map<string, number>();
+
+if (!isDesktopRuntime()) {
+  loadOrdersAndTradesSync();
+}
+
+function loadOrdersAndTradesSync(): void {
+  pendingOrders.value = getItem<PendingOrder[]>(PENDING_ORDERS_KEY) ?? [];
+  trades.value = getItem<Trade[]>(TRADES_KEY) ?? [];
+}
+
+function persistOrdersAndTrades(): void {
+  if (isDesktopRuntime()) {
+    void window.aguDesktop?.storageSet(PENDING_ORDERS_KEY, pendingOrders.value);
+    void window.aguDesktop?.storageSet(TRADES_KEY, trades.value);
+    return;
+  }
+  setItem(PENDING_ORDERS_KEY, pendingOrders.value);
+  setItem(TRADES_KEY, trades.value);
+}
+
+/** Available cash = initial capital + Σ sell proceeds − Σ buy costs. */
+const availableCash = computed(() => {
+  let cash = config.value.initialCapital ?? 0;
+  for (const tr of trades.value) {
+    if (tr.side === 'sell') {
+      cash += tr.amount;
+    } else {
+      cash -= tr.amount;
+    }
+  }
+  return Math.round(cash * 100) / 100;
+});
+
+/** Cumulative realized PnL across auto-filled sell trades. */
+const realizedTotalPnl = computed(() => {
+  let total = 0;
+  for (const tr of trades.value) {
+    if (tr.side === 'sell' && tr.realizedPnl != null) {
+      total += tr.realizedPnl;
+    }
+  }
+  return Math.round(total * 100) / 100;
+});
+
+/** Local calendar date key (YYYY-MM-DD) for same-day order checks. */
+function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * v2.10.1: adopted orders live only for the day they were created. Stale
+ * orders (created on a previous calendar day) are auto-cancelled so a new
+ * session never inherits yesterday's pending orders.
+ */
+function expireStaleOrders(): number {
+  const today = localDateKey(new Date());
+  let cancelled = 0;
+  for (const order of pendingOrders.value) {
+    if (order.status !== 'pending') {
+      continue;
+    }
+    const created = new Date(order.createdAt);
+    if (Number.isNaN(created.getTime())) {
+      continue;
+    }
+    if (localDateKey(created) === today) {
+      continue;
+    }
+    order.status = 'cancelled';
+    cancelled += 1;
+  }
+  if (cancelled > 0) {
+    persistOrdersAndTrades();
+    showToast(t('toast.ordersExpired', { count: cancelled }));
+  }
+  return cancelled;
+}
+
+function planDetailLabel(plan: ActionPlan, instrumentType: string): string {
+  const unit = instrumentType === 'fund_etf' ? '份' : '股';
+  const side = plan.side === 'sell' ? t('trade.sell') : t('trade.buy');
+  return `${side} ${plan.qty}${unit} @ ${plan.triggerPrice.toFixed(3)}`;
+}
+
+function notifyTradeAlert(code: string, name: string, message: string): void {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+  const settings = config.value.alertSettings;
+  if (settings?.enabled === false || settings?.tradeAlert === false) {
+    return;
+  }
+  sendDesktopAlert([{ type: 'trade', code, name, tradeMsg: message }]);
+}
+
+/**
+ * Execute a pending order's bookkeeping: position, cost, realized PnL and
+ * cash are derived from the Trade ledger. Runs in the primary runner only.
+ */
+function executeFill(order: PendingOrder): void {
+  const item = config.value.watchlist.find((w) => w.code === order.code);
+  const card = cards.value.find((c) => c.stock.code === order.code);
+  if (!item || !card) {
+    order.status = 'rejected';
+    persistOrdersAndTrades();
+    return;
+  }
+  const plan = order.plan;
+  const price = plan.triggerPrice;
+  const amount = Math.round(price * plan.qty * 100) / 100;
+
+  if (plan.side === 'sell') {
+    if (!hasPosition(item) || item.positionQty! < plan.qty) {
+      order.status = 'rejected';
+      persistOrdersAndTrades();
+      const detail = planDetailLabel(plan, item.instrumentType);
+      showToast(t('toast.orderRejected', { detail }));
+      notifyTradeAlert(item.code, item.name || item.code, `${t('trade.rejected')} ${detail}`);
+      return;
+    }
+    const realized = Math.round((price - item.costPrice!) * plan.qty * 100) / 100;
+    const remaining = item.positionQty! - plan.qty;
+    item.actualPnl = Math.round(((item.actualPnl ?? 0) + realized) * 100) / 100;
+    if (remaining <= 0) {
+      delete item.positionQty;
+      delete item.costPrice;
+      delete card.stock.positionQty;
+      delete card.stock.costPrice;
+    } else {
+      item.positionQty = remaining;
+      card.stock.positionQty = remaining;
+    }
+    card.stock.actualPnl = item.actualPnl;
+    trades.value.push({
+      id: `tr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      code: item.code,
+      name: item.name || item.code,
+      side: 'sell',
+      qty: plan.qty,
+      price,
+      amount,
+      realizedPnl: realized,
+      source: 'auto',
+      createdAt: new Date().toISOString(),
+    });
+  } else {
+    if (amount > availableCash.value) {
+      order.status = 'rejected';
+      persistOrdersAndTrades();
+      const detail = planDetailLabel(plan, item.instrumentType);
+      showToast(t('toast.insufficientFunds'));
+      notifyTradeAlert(item.code, item.name || item.code, `${t('trade.rejected')} ${detail}`);
+      return;
+    }
+    if (hasPosition(item)) {
+      const newQty = item.positionQty! + plan.qty;
+      const newCost = roundCostPrice(
+        (item.costPrice! * item.positionQty! + amount) / newQty,
+      );
+      item.positionQty = newQty;
+      item.costPrice = newCost;
+      card.stock.positionQty = newQty;
+      card.stock.costPrice = newCost;
+    } else {
+      item.positionQty = plan.qty;
+      item.costPrice = roundCostPrice(price);
+      card.stock.positionQty = plan.qty;
+      card.stock.costPrice = roundCostPrice(price);
+    }
+    trades.value.push({
+      id: `tr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      code: item.code,
+      name: item.name || item.code,
+      side: 'buy',
+      qty: plan.qty,
+      price,
+      amount,
+      source: 'auto',
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  order.status = 'filled';
+  order.filledAt = new Date().toISOString();
+
+  // Position changed — cached diagnosis and its fingerprint are stale.
+  if (card.diagnosis) {
+    card.diagnosis = null;
+    card.updatedAt = null;
+    card.diagnosisReused = false;
+    delete getDiagnosisCache()[item.code];
+    flushDiagnosisCache();
+  }
+  cards.value = [...cards.value];
+  persistConfig();
+  persistOrdersAndTrades();
+  broadcastLiveSync();
+  const detail = planDetailLabel(plan, item.instrumentType);
+  showToast(t('toast.orderFilled', { detail }));
+  notifyTradeAlert(item.code, item.name || item.code, `${t('trade.filled')} ${detail}`);
+}
+
+/**
+ * Check adopted orders for a card after its snapshot updates. Penetration
+ * semantics: sell triggers when price crosses the trigger from below, buy
+ * from above; the first observation already past the trigger fires too
+ * (covers overnight gaps).
+ */
+function checkPendingOrdersForCard(card: StockCardState): void {
+  expireStaleOrders();
+  const price = card.snapshot?.price;
+  if (price == null) {
+    return;
+  }
+  const orders = pendingOrders.value.filter(
+    (o) => o.code === card.stock.code && o.status === 'pending',
+  );
+  const lastPrice = orderLastPrices.get(card.stock.code);
+  for (const order of orders) {
+    const tp = order.plan.triggerPrice;
+    const triggered =
+      order.plan.condition === 'gte'
+        ? (lastPrice == null && price >= tp) || (lastPrice != null && lastPrice < tp && price >= tp)
+        : (lastPrice == null && price <= tp) || (lastPrice != null && lastPrice > tp && price <= tp);
+    if (triggered) {
+      executeFill(order);
+    }
+  }
+  orderLastPrices.set(card.stock.code, price);
+}
 
 let diagnosisCacheMemory: Record<string, DiagnosisCacheEntry> | null = null;
 
@@ -167,6 +409,7 @@ const defaultConfig: AppConfig = {
     signalAlert: true,
     authErrorAlert: true,
     quoteErrorAlert: true,
+    tradeAlert: true,
   },
 };
 
@@ -392,6 +635,8 @@ async function refreshCardQuoteAndDiagnosis(
     ...snap,
     instrumentType: card.stock.instrumentType,
   };
+  // v2.10: any snapshot update may trigger adopted pending orders.
+  checkPendingOrdersForCard(card);
   // Record today's close price for 7-day trend history.
   if (snap.price != null) {
     recordPrice(card.stock.code, snap.price);
@@ -430,6 +675,7 @@ async function refreshCardQuoteAndDiagnosis(
       config.value,
       aligned,
       session,
+      config.value.initialCapital != null ? availableCash.value : null,
     );
     if (result.ok) {
       const updatedAt = formatTimeHms();
@@ -704,6 +950,17 @@ async function hydrateDesktopPersistence(): Promise<void> {
     if (snap?.diagnosisCache) {
       diagnosisCacheMemory = readDiagnosisCacheFromObject(snap.diagnosisCache);
     }
+    // v2.10: simulated account state lives in the file-backed KV store.
+    const [orders, ledger] = await Promise.all([
+      desktopStorageGet<PendingOrder[]>(PENDING_ORDERS_KEY),
+      desktopStorageGet<Trade[]>(TRADES_KEY),
+    ]);
+    if (orders) {
+      pendingOrders.value = orders;
+    }
+    if (ledger) {
+      trades.value = ledger;
+    }
     cards.value = buildCards(config.value.watchlist);
     desktopPersistenceReady = true;
   }
@@ -936,6 +1193,96 @@ export function useAppState() {
     broadcastLiveSync();
   }
 
+  // --- v2.10 adopt / cancel adopted AI orders ---
+
+  function planOf(card: StockCardState, planType: PlanType): ActionPlan | null | undefined {
+    const d = card.diagnosis;
+    if (!d) {
+      return undefined;
+    }
+    if (planType === 'short') {
+      return d.shortPlan;
+    }
+    if (planType === 'band') {
+      return d.bandPlan;
+    }
+    return d.buildPlan;
+  }
+
+  /** Adopt an AI structured order → pending order. Validates at listing time. */
+  function adoptPlan(code: string, planType: PlanType): boolean {
+    const card = cards.value.find((c) => c.stock.code === code);
+    const item = config.value.watchlist.find((w) => w.code === code);
+    if (!card || !item) {
+      return false;
+    }
+    const plan = planOf(card, planType);
+    if (!plan) {
+      return false;
+    }
+    if (
+      pendingOrders.value.some(
+        (o) => o.code === code && o.planType === planType && o.status === 'pending',
+      )
+    ) {
+      showToast(t('toast.orderAlreadyPending'));
+      return false;
+    }
+    if (plan.side === 'sell') {
+      if (!hasPosition(item) || item.positionQty! < plan.qty) {
+        showToast(t('toast.sellQtyExceeds'));
+        return false;
+      }
+    } else {
+      if (config.value.initialCapital == null) {
+        showToast(t('toast.needInitialCapital'));
+        return false;
+      }
+      if (plan.qty * plan.triggerPrice > availableCash.value) {
+        showToast(t('toast.insufficientFunds'));
+        return false;
+      }
+    }
+    pendingOrders.value.push({
+      id: `po_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      code,
+      name: item.name || code,
+      plan: { ...plan },
+      planType,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+    });
+    persistOrdersAndTrades();
+    showToast(
+      t('toast.orderAdopted', { detail: planDetailLabel(plan, item.instrumentType) }),
+    );
+    return true;
+  }
+
+  /** Cancel a pending order (only pending orders can be cancelled). */
+  function cancelOrder(orderId: string): void {
+    const order = pendingOrders.value.find((o) => o.id === orderId);
+    if (!order || order.status !== 'pending') {
+      return;
+    }
+    order.status = 'cancelled';
+    persistOrdersAndTrades();
+    showToast(t('toast.orderCancelled'));
+  }
+
+  /** v2.10.1: cancel the adopted order for a suggestion row (card chip). */
+  function cancelOrderForPlan(code: string, planType: PlanType): void {
+    const order = pendingOrders.value.find(
+      (o) => o.code === code && o.planType === planType && o.status === 'pending',
+    );
+    if (!order) {
+      return;
+    }
+    order.status = 'cancelled';
+    persistOrdersAndTrades();
+    showToast(t('toast.orderCancelled'));
+  }
+
   async function runRefreshSingleCard(code: string) {
     if (!isPrimaryRunner) {
       window.aguDesktop?.requestRefreshSymbol(code);
@@ -1145,6 +1492,7 @@ export function useAppState() {
           if (card.stock.name !== snap.name) {
             card.stock.name = snap.name;
           }
+          checkPendingOrdersForCard(card);
         }
       }
       const cardsToCheck = cards.value.filter((c) => quotes.has(c.stock.code));
@@ -1213,6 +1561,7 @@ export function useAppState() {
     await applyLocalFileConfig();
 
     if (isPrimaryRunner) {
+      expireStaleOrders();
       await initCalendar(false);
       setupPrimaryDesktopIpc();
       startScheduler();
@@ -1496,14 +1845,15 @@ export function useAppState() {
         } catch { /* ignore */ }
       }
       const next = new Map(trackingSnapshots.value);
-	      for (const card of cards.value) {
-	        const snap = quotes.get(card.stock.code);
-	        if (snap) {
-	          card.snapshot = { ...snap, instrumentType: card.stock.instrumentType };
-	          if (card.stock.name !== snap.name) card.stock.name = snap.name;
-	          if (snap.price != null) recordPrice(card.stock.code, snap.price);
-	        }
-	      }
+		      for (const card of cards.value) {
+		        const snap = quotes.get(card.stock.code);
+		        if (snap) {
+		          card.snapshot = { ...snap, instrumentType: card.stock.instrumentType };
+		          if (card.stock.name !== snap.name) card.stock.name = snap.name;
+		          if (snap.price != null) recordPrice(card.stock.code, snap.price);
+		          checkPendingOrdersForCard(card);
+		        }
+		      }
       for (const code of allCodes) {
         const snap = quotes.get(code);
         if (snap) next.set(code, { name: snap.name ?? code, price: snap.price, changePct: snap.changePct });
@@ -1584,13 +1934,20 @@ export function useAppState() {
     addSymbol,
     updateSymbolPosition,
     removeSymbol,
+    adoptPlan,
+    cancelOrder,
+    cancelOrderForPlan,
+    pendingOrders,
+    trades,
+    availableCash,
+    realizedTotalPnl,
     runRefreshSymbol: runRefreshSingleCard,
     runRefresh,
     initCalendar,
     bootstrap,
     exportUserBackup,
     updateAlertSettings: (settings: Partial<AlertSettings>) => {
-      const current = config.value.alertSettings ?? { enabled: true, priceAlert: true, signalAlert: true, authErrorAlert: true, quoteErrorAlert: true };
+      const current = config.value.alertSettings ?? { enabled: true, priceAlert: true, signalAlert: true, authErrorAlert: true, quoteErrorAlert: true, tradeAlert: true };
       config.value.alertSettings = { ...current, ...settings };
       persistConfig();
       broadcastLiveSync();

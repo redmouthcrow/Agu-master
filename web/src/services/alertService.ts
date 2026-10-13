@@ -12,6 +12,7 @@ const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   signalAlert: true,
   authErrorAlert: true,
   quoteErrorAlert: true,
+  tradeAlert: true,
 };
 
 const BREAKTHROUGH_DEBOUNCE_MS = 10_000;

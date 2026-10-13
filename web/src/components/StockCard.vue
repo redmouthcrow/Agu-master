@@ -1,6 +1,11 @@
+<script lang="ts">
+/** Session-scoped dismissed plan keys `${code}:${planType}` (v2.10). */
+const dismissedPlans = new Set<string>();
+</script>
+
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import type { StockCardState, UserGroup } from '../types';
+import { computed, ref, watch } from 'vue';
+import type { PendingOrder, PlanType, StockCardState, UserGroup } from '../types';
 import { formatCostPrice, formatPct, formatPrice, getSignalTone } from '../utils/display';
 import { calcPnlPct, hasPosition, parsePositionInputs } from '../utils/position';
 import { useI18n } from '../i18n';
@@ -12,6 +17,8 @@ const props = defineProps<{
   widgetMode?: boolean;
   /** v2.9: user-specified total portfolio value for weight display */
   totalCapital?: number;
+  /** v2.10: adopted orders, for the "已挂单" state on suggestion rows */
+  pendingOrders?: PendingOrder[];
 }>();
 
 const emit = defineEmits<{
@@ -24,9 +31,44 @@ const emit = defineEmits<{
   toggleKeyLevelsLock: [code: string];
   cycleRefreshMode: [code: string];
   setGroup: [code: string, groupId: string | undefined];
+  adoptPlan: [code: string, planType: PlanType];
+  rejectPlan: [code: string, planType: PlanType];
+  cancelPlan: [code: string, planType: PlanType];
 }>();
 
 const { t } = useI18n();
+
+// A fresh diagnosis re-offers its suggestions; a cached (reused) one keeps
+// any dismissal from earlier in the session.
+watch(
+  () => props.card.diagnosis,
+  () => {
+    for (const key of [...dismissedPlans]) {
+      if (key.startsWith(`${props.card.stock.code}:`)) {
+        dismissedPlans.delete(key);
+      }
+    }
+  },
+);
+
+function isPlanPending(planType: PlanType): boolean {
+  return (
+    props.pendingOrders?.some(
+      (o) =>
+        o.code === props.card.stock.code &&
+        o.planType === planType &&
+        o.status === 'pending',
+    ) ?? false
+  );
+}
+
+function isPlanDismissed(planType: PlanType): boolean {
+  return dismissedPlans.has(`${props.card.stock.code}:${planType}`);
+}
+
+function dismissPlan(planType: PlanType) {
+  dismissedPlans.add(`${props.card.stock.code}:${planType}`);
+}
 
 const editingPosition = ref(false);
 const editQty = ref('');
@@ -423,13 +465,79 @@ const customKeyLevelCount = computed(
           </p>
           <p v-if="card.diagnosis.buildPositionAdvice" class="line-clamp line-clamp-loose action-text">
             {{ t('card.buildPositionAdvicePrefix') }}{{ card.diagnosis.buildPositionAdvice }}
+            <span v-if="!widgetMode && card.diagnosis.buildPlan" class="plan-actions">
+              <template v-if="isPlanPending('build')">
+                <button
+                  type="button"
+                  class="plan-chip plan-chip-btn"
+                  :title="t('card.adoptCancelHint')"
+                  @click="emit('cancelPlan', card.stock.code, 'build')"
+                >{{ t('card.adopted') }} ✕</button>
+              </template>
+              <template v-else-if="!isPlanDismissed('build')">
+                <button
+                  type="button"
+                  class="btn-link btn-link-sm"
+                  @click="emit('adoptPlan', card.stock.code, 'build')"
+                >{{ t('card.adopt') }}</button>
+                <button
+                  type="button"
+                  class="btn-link btn-link-sm"
+                  @click="dismissPlan('build')"
+                >{{ t('card.reject') }}</button>
+              </template>
+            </span>
           </p>
           <template v-else-if="card.diagnosis.bandAction">
             <p class="line-clamp line-clamp-loose action-text">
               {{ t('card.bandActionPrefix') }}{{ card.diagnosis.bandAction }}
+              <span v-if="!widgetMode && card.diagnosis.bandPlan" class="plan-actions">
+                <template v-if="isPlanPending('band')">
+                  <button
+                    type="button"
+                    class="plan-chip plan-chip-btn"
+                    :title="t('card.adoptCancelHint')"
+                    @click="emit('cancelPlan', card.stock.code, 'band')"
+                  >{{ t('card.adopted') }} ✕</button>
+                </template>
+                <template v-else-if="!isPlanDismissed('band')">
+                  <button
+                    type="button"
+                    class="btn-link btn-link-sm"
+                    @click="emit('adoptPlan', card.stock.code, 'band')"
+                  >{{ t('card.adopt') }}</button>
+                  <button
+                    type="button"
+                    class="btn-link btn-link-sm"
+                    @click="dismissPlan('band')"
+                  >{{ t('card.reject') }}</button>
+                </template>
+              </span>
             </p>
             <p v-if="card.diagnosis.shortAction" class="line-clamp line-clamp-loose action-text">
               {{ t('card.shortActionPrefix') }}{{ card.diagnosis.shortAction }}
+              <span v-if="!widgetMode && card.diagnosis.shortPlan" class="plan-actions">
+                <template v-if="isPlanPending('short')">
+                  <button
+                    type="button"
+                    class="plan-chip plan-chip-btn"
+                    :title="t('card.adoptCancelHint')"
+                    @click="emit('cancelPlan', card.stock.code, 'short')"
+                  >{{ t('card.adopted') }} ✕</button>
+                </template>
+                <template v-else-if="!isPlanDismissed('short')">
+                  <button
+                    type="button"
+                    class="btn-link btn-link-sm"
+                    @click="emit('adoptPlan', card.stock.code, 'short')"
+                  >{{ t('card.adopt') }}</button>
+                  <button
+                    type="button"
+                    class="btn-link btn-link-sm"
+                    @click="dismissPlan('short')"
+                  >{{ t('card.reject') }}</button>
+                </template>
+              </span>
             </p>
           </template>
         </template>
@@ -459,3 +567,29 @@ const customKeyLevelCount = computed(
     </div>
   </article>
 </template>
+
+<style scoped>
+.plan-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+.plan-chip {
+  font-size: 11px;
+  color: #1677ff;
+  border: 1px solid #1677ff55;
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+.plan-chip-btn {
+  cursor: pointer;
+  background: none;
+  font: inherit;
+}
+.plan-chip-btn:hover {
+  color: #ff4d4f;
+  border-color: #ff4d4f88;
+}
+</style>
