@@ -90,6 +90,8 @@ export interface PendingOrder {
   name: string;
   plan: ActionPlan;
   planType: PlanType;
+  /** v2.12: signal captured at adopt time, for attribution. */
+  signal?: string;
   createdAt: string;
   status: 'pending' | 'filled' | 'cancelled' | 'rejected';
   filledAt?: string;
@@ -106,7 +108,45 @@ export interface Trade {
   amount: number;
   realizedPnl?: number;
   source: 'auto' | 'manual';
+  /** v2.12: advice type this fill came from (absent for pre-v2.12 fills). */
+  planType?: PlanType;
+  /** v2.12: signal captured when the plan was adopted. */
+  signal?: string;
+  /** v2.12: total trading fees for this fill (commission + stamp tax + transfer fee). */
+  fee?: number;
   createdAt: string;
+}
+
+/** v2.12: daily equity snapshot for the performance feedback loop. */
+export interface EquitySnapshot {
+  date: string;            // YYYY-MM-DD
+  totalAssets: number;     // availableCash + Σ(currentPrice × positionQty)
+  realizedPnl: number;     // Σ Trade.realizedPnl (ledger scope, fees deducted)
+  unrealizedPnl: number;   // Σ(currentPrice − costPrice) × qty
+  cash: number;            // availableCash at snapshot time
+  indexClose?: number;     // CSI300 close for benchmark comparison
+}
+
+/** v2.12: attribution row grouped by advice type. */
+export interface AttributionRow {
+  planType: PlanType | 'manual';
+  sellCount: number;
+  winRate: number | null;
+  totalPnl: number;
+}
+
+/** v2.12: computed performance metrics (see services/performance.ts). */
+export interface PerformanceStats {
+  /** D9: (last.totalAssets / first.totalAssets − 1); null when <2 snapshots. */
+  totalReturn: number | null;
+  realizedPnl: number;
+  unrealizedPnl: number;
+  winRate: number | null;
+  maxDrawdown: number | null;  // negative; UI shows absolute value
+  profitFactor: number | null; // Σwins/|Σlosses|; no losses→null; no wins with losses→0
+  benchmarkReturn: number | null;
+  excessReturn: number | null; // same-window portfolio return − benchmark return
+  attribution: AttributionRow[];
 }
 
 export interface WidgetWindowBounds {

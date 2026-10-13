@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar.vue';
 import StockCard from './components/StockCard.vue';
 import PortfolioCard from './components/PortfolioCard.vue';
 import AboutModal from './components/AboutModal.vue';
+import PerformancePanel from './components/PerformancePanel.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import { useAppState } from './composables/useAppState';
 import { DEFAULT_GROUP_ID } from './types';
@@ -14,6 +15,7 @@ const { t } = useI18n();
 const stockInput = ref('');
 const sidebarCollapsed = ref(false);
 const aboutOpen = ref(false);
+const perfOpen = ref(false);
 
 const {
   cards,
@@ -68,6 +70,9 @@ const {
   moveGroupDown,
   movePortfolioUp,
   movePortfolioDown,
+  equitySnapshots,
+  performanceStats,
+  snapshotSkipped,
 } = useAppState();
 
 const groups = computed(() => config.value.groups ?? []);
@@ -159,6 +164,7 @@ onMounted(() => {
       @move-portfolio-up="movePortfolioUp"
       @move-portfolio-down="movePortfolioDown"
       @open-about="aboutOpen = true"
+      @open-perf="perfOpen = true"
     />
 
     <div class="app-main">
@@ -267,6 +273,13 @@ onMounted(() => {
 
   <ToastContainer :toasts="toasts" />
   <AboutModal v-if="aboutOpen" @close="aboutOpen = false" />
+  <PerformancePanel
+    v-if="perfOpen"
+    :stats="performanceStats"
+    :snapshots="equitySnapshots"
+    :skipped="snapshotSkipped"
+    @close="perfOpen = false"
+  />
 </template>
 
 <style>

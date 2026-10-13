@@ -7,6 +7,7 @@ import type {
   CalendarSyncStatus,
   DiagnosisCacheEntry,
   DiagnosisResult,
+  EquitySnapshot,
   LiveSyncPayload,
   PendingOrder,
   PlanType,
@@ -59,6 +60,8 @@ import {
 } from '../services/desktopPersistence';
 import { t } from '../i18n';
 import { collectAlertsFromRound, createAuthErrorAlert } from '../services/alertService';
+import { calcTradeFee } from '../services/tradingCost';
+import { computePerformance } from '../services/performance';
 import {
   applyKeyLevelsFromDiagnosis,
   toggleKeyLevelsLock as toggleKlLock,
@@ -71,7 +74,10 @@ const DIAG_KEY = 'diagnosis_cache';
 const LIVE_SYNC_KEY = 'live_sync';
 const PENDING_ORDERS_KEY = 'pending_orders';
 const TRADES_KEY = 'trades';
+const EQUITY_SNAPSHOTS_KEY = 'equity_snapshots';
 const STORAGE_PREFIX = 'agu_';
+/** v2.12: max retained equity snapshots (~1.1 calendar years). */
+const MAX_EQUITY_SNAPSHOTS = 400;
 
 /** Delay between sequential AI diagnosis calls (avoid hammering the LLM). */
 const CARD_REFRESH_GAP_MS = 300;
@@ -89,6 +95,8 @@ let authAlertSentThisRound = false;
 // --- v2.10 simulated account & adopted orders ---
 const pendingOrders = ref<PendingOrder[]>([]);
 const trades = ref<Trade[]>([]);
+// --- v2.12 equity snapshots (performance feedback loop) ---
+const equitySnapshots = ref<EquitySnapshot[]>([]);
 /** Last observed price per symbol, for order trigger penetration detection. */
 const orderLastPrices = new Map<string, number>();
 
@@ -99,26 +107,33 @@ if (!isDesktopRuntime()) {
 function loadOrdersAndTradesSync(): void {
   pendingOrders.value = getItem<PendingOrder[]>(PENDING_ORDERS_KEY) ?? [];
   trades.value = getItem<Trade[]>(TRADES_KEY) ?? [];
+  equitySnapshots.value = getItem<EquitySnapshot[]>(EQUITY_SNAPSHOTS_KEY) ?? [];
 }
 
 function persistOrdersAndTrades(): void {
   if (isDesktopRuntime()) {
     void window.aguDesktop?.storageSet(PENDING_ORDERS_KEY, pendingOrders.value);
     void window.aguDesktop?.storageSet(TRADES_KEY, trades.value);
+    void window.aguDesktop?.storageSet(EQUITY_SNAPSHOTS_KEY, equitySnapshots.value);
     return;
   }
   setItem(PENDING_ORDERS_KEY, pendingOrders.value);
   setItem(TRADES_KEY, trades.value);
+  setItem(EQUITY_SNAPSHOTS_KEY, equitySnapshots.value);
 }
 
-/** Available cash = initial capital + Σ sell proceeds − Σ buy costs. */
+/**
+ * Available cash = initial capital + Σ(sell proceeds − fees) − Σ(buy costs + fees).
+ * v2.12: fees are part of the ledger math (legacy trades without fee use 0).
+ */
 const availableCash = computed(() => {
   let cash = config.value.initialCapital ?? 0;
   for (const tr of trades.value) {
+    const fee = tr.fee ?? 0;
     if (tr.side === 'sell') {
-      cash += tr.amount;
+      cash += tr.amount - fee;
     } else {
-      cash -= tr.amount;
+      cash -= tr.amount + fee;
     }
   }
   return Math.round(cash * 100) / 100;
@@ -139,6 +154,91 @@ const realizedTotalPnl = computed(() => {
 function localDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+// --- v2.12 performance feedback loop: daily equity snapshots ---
+
+/** CSI300 index code for benchmark comparison. */
+const INDEX_CODE = 'sh000300';
+/** Set when a day's snapshot was skipped due to a missing/stale quote. */
+const snapshotSkipped = ref(false);
+
+/**
+ * Record today's equity snapshot (primary runner only).
+ * - totalAssets = availableCash + Σ(currentPrice × positionQty)
+ * - Any position card with a null price OR a quoteTime that is not today
+ *   (stale quote from a silent refresh failure) skips the WHOLE day —
+ *   no NaN, no stale carry, per D10.
+ * - Same-day overwrite, cross-day append, cap at MAX_EQUITY_SNAPSHOTS.
+ */
+async function snapshotEquity(): Promise<void> {
+  if (!isPrimaryRunner) {
+    return;
+  }
+  const watchlist = config.value.watchlist;
+  if (watchlist.length === 0) {
+    return;
+  }
+  const today = localDateKey(new Date());
+  const cardByCode = new Map(cards.value.map((c) => [c.stock.code, c]));
+
+  let marketValue = 0;
+  let unrealized = 0;
+  for (const item of watchlist) {
+    if (item.positionQty == null) {
+      continue;
+    }
+    const card = cardByCode.get(item.code);
+    const price = card?.snapshot?.price;
+    const quoteDate = card?.snapshot?.quoteTime?.slice(0, 10);
+    // Missing price or a quote not from today → skip the whole day.
+    if (price == null || quoteDate !== today) {
+      snapshotSkipped.value = true;
+      return;
+    }
+    marketValue += price * item.positionQty;
+    if (item.costPrice != null) {
+      unrealized += (price - item.costPrice) * item.positionQty;
+    }
+  }
+
+  // Fetch the index close for benchmark comparison (failure → undefined).
+  let indexClose: number | undefined;
+  try {
+    const idxQuotes = await fetchQuotesWithFallback([INDEX_CODE]);
+    const idx = idxQuotes.get(INDEX_CODE);
+    if (idx?.price != null) {
+      indexClose = idx.price;
+    }
+  } catch {
+    /* benchmark line optional */
+  }
+
+  const totalAssets = Math.round((availableCash.value + marketValue) * 100) / 100;
+  const snap: EquitySnapshot = {
+    date: today,
+    totalAssets,
+    realizedPnl: realizedTotalPnl.value,
+    unrealizedPnl: Math.round(unrealized * 100) / 100,
+    cash: availableCash.value,
+    indexClose,
+  };
+
+  const list = [...equitySnapshots.value];
+  const idx = list.findIndex((s) => s.date === today);
+  if (idx >= 0) {
+    list[idx] = snap; // same-day overwrite (idempotent across dual triggers)
+  } else {
+    list.push(snap);
+  }
+  equitySnapshots.value = list.slice(-MAX_EQUITY_SNAPSHOTS);
+  persistOrdersAndTrades();
+  snapshotSkipped.value = false;
+}
+
+/** v2.12: reactive performance stats for the panel. */
+const performanceStats = computed(() =>
+  computePerformance(trades.value, equitySnapshots.value, config.value.initialCapital),
+);
 
 /**
  * v2.10.1: adopted orders live only for the day they were created. Stale
@@ -201,6 +301,7 @@ function executeFill(order: PendingOrder): void {
   const plan = order.plan;
   const price = plan.triggerPrice;
   const amount = Math.round(price * plan.qty * 100) / 100;
+  const fee = calcTradeFee(plan.side, amount, item.instrumentType);
 
   if (plan.side === 'sell') {
     if (!hasPosition(item) || item.positionQty! < plan.qty) {
@@ -211,7 +312,8 @@ function executeFill(order: PendingOrder): void {
       notifyTradeAlert(item.code, item.name || item.code, `${t('trade.rejected')} ${detail}`);
       return;
     }
-    const realized = Math.round((price - item.costPrice!) * plan.qty * 100) / 100;
+    // v2.12: sell fees are deducted from realized PnL.
+    const realized = Math.round(((price - item.costPrice!) * plan.qty - fee) * 100) / 100;
     const remaining = item.positionQty! - plan.qty;
     item.actualPnl = Math.round(((item.actualPnl ?? 0) + realized) * 100) / 100;
     if (remaining <= 0) {
@@ -234,10 +336,14 @@ function executeFill(order: PendingOrder): void {
       amount,
       realizedPnl: realized,
       source: 'auto',
+      planType: order.planType,
+      signal: order.signal,
+      fee,
       createdAt: new Date().toISOString(),
     });
   } else {
-    if (amount > availableCash.value) {
+    // v2.12: buy funds check includes the fee.
+    if (amount + fee > availableCash.value) {
       order.status = 'rejected';
       persistOrdersAndTrades();
       const detail = planDetailLabel(plan, item.instrumentType);
@@ -246,9 +352,10 @@ function executeFill(order: PendingOrder): void {
       return;
     }
     if (hasPosition(item)) {
+      // v2.12: buy fee is amortized into cost basis.
       const newQty = item.positionQty! + plan.qty;
       const newCost = roundCostPrice(
-        (item.costPrice! * item.positionQty! + amount) / newQty,
+        (item.costPrice! * item.positionQty! + amount + fee) / newQty,
       );
       item.positionQty = newQty;
       item.costPrice = newCost;
@@ -256,9 +363,9 @@ function executeFill(order: PendingOrder): void {
       card.stock.costPrice = newCost;
     } else {
       item.positionQty = plan.qty;
-      item.costPrice = roundCostPrice(price);
+      item.costPrice = roundCostPrice((amount + fee) / plan.qty);
       card.stock.positionQty = plan.qty;
-      card.stock.costPrice = roundCostPrice(price);
+      card.stock.costPrice = item.costPrice;
     }
     trades.value.push({
       id: `tr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -269,6 +376,9 @@ function executeFill(order: PendingOrder): void {
       price,
       amount,
       source: 'auto',
+      planType: order.planType,
+      signal: order.signal,
+      fee,
       createdAt: new Date().toISOString(),
     });
   }
@@ -951,15 +1061,20 @@ async function hydrateDesktopPersistence(): Promise<void> {
       diagnosisCacheMemory = readDiagnosisCacheFromObject(snap.diagnosisCache);
     }
     // v2.10: simulated account state lives in the file-backed KV store.
-    const [orders, ledger] = await Promise.all([
+    // v2.12: equity snapshots hydrate alongside orders/trades.
+    const [orders, ledger, snapshots] = await Promise.all([
       desktopStorageGet<PendingOrder[]>(PENDING_ORDERS_KEY),
       desktopStorageGet<Trade[]>(TRADES_KEY),
+      desktopStorageGet<EquitySnapshot[]>(EQUITY_SNAPSHOTS_KEY),
     ]);
     if (orders) {
       pendingOrders.value = orders;
     }
     if (ledger) {
       trades.value = ledger;
+    }
+    if (snapshots) {
+      equitySnapshots.value = snapshots;
     }
     cards.value = buildCards(config.value.watchlist);
     desktopPersistenceReady = true;
@@ -1238,7 +1353,10 @@ export function useAppState() {
         showToast(t('toast.needInitialCapital'));
         return false;
       }
-      if (plan.qty * plan.triggerPrice > availableCash.value) {
+      // v2.12: the adopt-time check includes the estimated fee.
+      const estAmount = Math.round(plan.qty * plan.triggerPrice * 100) / 100;
+      const estFee = calcTradeFee('buy', estAmount, item.instrumentType);
+      if (estAmount + estFee > availableCash.value) {
         showToast(t('toast.insufficientFunds'));
         return false;
       }
@@ -1249,6 +1367,8 @@ export function useAppState() {
       name: item.name || code,
       plan: { ...plan },
       planType,
+      // v2.12: capture the signal at adopt time for attribution.
+      signal: card.diagnosis?.signal,
       createdAt: new Date().toISOString(),
       status: 'pending',
     });
@@ -1394,6 +1514,7 @@ export function useAppState() {
       refreshing.value = false;
       broadcastLiveSync();
       checkAndSendAlerts(cards.value);
+      void snapshotEquity();
       if (manual) {
         restartScheduler();
       }
@@ -1861,7 +1982,7 @@ export function useAppState() {
       trackingSnapshots.value = next;
       cards.value = [...cards.value];
       broadcastLiveSync();
-      console.log('[refreshTracking] codes:', allCodes, 'cached:', [...next.keys()], 'snapshots:', [...next.entries()].map(([k,v]) => `${k}:${v.changePct}%`));
+      void snapshotEquity();
     } catch { /* retry next click */ }
     finally { refreshingTracking = false; }
 	  }
@@ -1941,6 +2062,12 @@ export function useAppState() {
     trades,
     availableCash,
     realizedTotalPnl,
+    // v2.12 performance feedback loop
+    equitySnapshots,
+    performanceStats,
+    snapshotSkipped,
+    snapshotEquity,
+
     runRefreshSymbol: runRefreshSingleCard,
     runRefresh,
     initCalendar,

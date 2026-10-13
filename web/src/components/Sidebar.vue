@@ -26,6 +26,7 @@ const emit = defineEmits<{
   movePortfolioUp: [id: string];
   movePortfolioDown: [id: string];
   openAbout: [];
+  openPerf: [];
 }>();
 
 const { t } = useI18n();
@@ -136,6 +137,7 @@ function cancelPfRename() { editingPfId.value = null; editPfName.value = ''; }
           </div>
         </div>
         <div class="sidebar-footer">
+          <button class="btn-link btn-link-sm" @click="emit('openPerf')">{{ t('perf.open') }}</button>
           <button class="btn-link btn-link-sm" @click="emit('openAbout')">关于 AguMaster</button>
         </div>
       </div>
