@@ -19,6 +19,14 @@
 - `README.md`（用户可见功能说明）
 - Bug 修复 → 第三位 +1；新增功能 → 第二位 +1
 
+**规则：每次修改完成后，必须打包 Windows 安装包：**
+```bash
+cd web && npm run build          # 构建前端
+cd ../desktop && npm run prepack:clean   # 清理 release
+cd . && npm run pack:builder             # 打包 NSIS 安装包
+```
+输出：`desktop/release/staging/AguMaster-{version}-win-x64-setup.exe`
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
