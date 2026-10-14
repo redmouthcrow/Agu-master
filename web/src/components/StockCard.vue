@@ -463,33 +463,8 @@ const customKeyLevelCount = computed(
           <p class="line-clamp risk-text">
             <span class="tag">{{ t('card.tagRisk') }}</span> {{ card.diagnosis.risk }}
           </p>
-          <p v-if="card.diagnosis.buildPositionAdvice" class="line-clamp line-clamp-loose action-text">
-            {{ t('card.buildPositionAdvicePrefix') }}{{ card.diagnosis.buildPositionAdvice }}
-            <span v-if="!widgetMode && card.diagnosis.buildPlan" class="plan-actions">
-              <template v-if="isPlanPending('build')">
-                <button
-                  type="button"
-                  class="plan-chip plan-chip-btn"
-                  :title="t('card.adoptCancelHint')"
-                  @click="emit('cancelPlan', card.stock.code, 'build')"
-                >{{ t('card.adopted') }} ✕</button>
-              </template>
-              <template v-else-if="!isPlanDismissed('build')">
-                <button
-                  type="button"
-                  class="btn-link btn-link-sm"
-                  @click="emit('adoptPlan', card.stock.code, 'build')"
-                >{{ t('card.adopt') }}</button>
-                <button
-                  type="button"
-                  class="btn-link btn-link-sm"
-                  @click="dismissPlan('build')"
-                >{{ t('card.reject') }}</button>
-              </template>
-            </span>
-          </p>
-          <template v-else-if="card.diagnosis.bandAction">
-            <p class="line-clamp line-clamp-loose action-text">
+          <template v-if="card.diagnosis.bandAction || card.diagnosis.shortAction">
+            <p v-if="card.diagnosis.bandAction" class="line-clamp line-clamp-loose action-text">
               {{ t('card.bandActionPrefix') }}{{ card.diagnosis.bandAction }}
               <span v-if="!widgetMode && card.diagnosis.bandPlan" class="plan-actions">
                 <template v-if="isPlanPending('band')">
@@ -540,6 +515,31 @@ const customKeyLevelCount = computed(
               </span>
             </p>
           </template>
+          <p v-else-if="card.diagnosis.buildPositionAdvice" class="line-clamp line-clamp-loose action-text">
+            {{ t('card.buildPositionAdvicePrefix') }}{{ card.diagnosis.buildPositionAdvice }}
+            <span v-if="!widgetMode && card.diagnosis.buildPlan" class="plan-actions">
+              <template v-if="isPlanPending('build')">
+                <button
+                  type="button"
+                  class="plan-chip plan-chip-btn"
+                  :title="t('card.adoptCancelHint')"
+                  @click="emit('cancelPlan', card.stock.code, 'build')"
+                >{{ t('card.adopted') }} ✕</button>
+              </template>
+              <template v-else-if="!isPlanDismissed('build')">
+                <button
+                  type="button"
+                  class="btn-link btn-link-sm"
+                  @click="emit('adoptPlan', card.stock.code, 'build')"
+                >{{ t('card.adopt') }}</button>
+                <button
+                  type="button"
+                  class="btn-link btn-link-sm"
+                  @click="dismissPlan('build')"
+                >{{ t('card.reject') }}</button>
+              </template>
+            </span>
+          </p>
         </template>
         <template v-else>
           <p class="muted">{{ t('card.waitDiagnosis') }}</p>

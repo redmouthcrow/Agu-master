@@ -8,6 +8,7 @@ import type {
   WatchlistItem,
 } from '../types';
 import { calcPnlPct, hasPosition, roundCostPrice } from '../utils/position';
+import { normalizeDiagnosisByPosition } from '../utils/diagnosisMode';
 import { formatVolumeForPrompt } from './quoteJsonp';
 import { formatHistoryText } from '../utils/priceHistory';
 
@@ -68,6 +69,7 @@ const SYSTEM_PROMPT_BASE = `# Role
 const SYSTEM_PROMPT_WITH_POSITION = `${SYSTEM_PROMPT_BASE}
 
 # Position Context (持仓上下文)
+**字段互斥（最高优先级，覆盖上方 Output Format）**：已持仓时禁止输出 buildPositionAdvice 和 buildPlan 字段——它们是空仓用户专用的建仓建议，已持仓时输出属于错误。只按本节下方的 JSON 格式输出。
 当 User Message 包含持仓信息（qty、cost、pnlPct）时，必须额外输出 shortAction 字段（不超过40字），结合浮动盈亏率 pnlPct 与 signal 给出可执行短期持仓建议，**必须包含具体数量**（如：减半仓卖出500股 / 加仓2手 / 全部止盈清仓 / 持有不动）。严禁对微小浮动盈亏（pnlPct 绝对值 < 2%）给出减仓建议——微盈时信号应为多头持股或持股观望，shortAction 建议持有或关注关键位得失。
 
 结构化操作指令（v2.10）：
@@ -320,7 +322,8 @@ export async function runDiagnosis(
     } else {
       parsed.buildPlan = sanitizeActionPlan(parsed.buildPlan);
     }
-    return { ok: true, data: parsed };
+    // v2.12.4: 剥离另一持仓模式混入的建议字段，保证展示/缓存数据确定性。
+    return { ok: true, data: normalizeDiagnosisByPosition(parsed, withPosition) };
   } catch {
     return { ok: false, raw };
   }
