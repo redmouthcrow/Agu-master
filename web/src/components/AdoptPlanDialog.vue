@@ -6,6 +6,7 @@ import { calcTradeFee } from '../services/tradingCost';
 import { hasPosition } from '../utils/position';
 import {
   buildManualPlan,
+  computeSellRatioQty,
   inferAdviceCondition,
   inferAdviceSide,
   pickTriggerPrice,
@@ -187,6 +188,24 @@ function confirm() {
           :placeholder="t('adoptDialog.qtyPlaceholder')"
           @keyup.enter="confirm"
         />
+        <!-- v2.14.0: 「卖掉一部分」比例快捷 —— 按持仓自动换算数量 -->
+        <div v-if="side === 'sell' && heldQty != null" class="ratio-row">
+          <button
+            type="button"
+            class="ratio-btn"
+            @click="qtyStr = String(computeSellRatioQty(heldQty, 1 / 3))"
+          >1/3</button>
+          <button
+            type="button"
+            class="ratio-btn"
+            @click="qtyStr = String(computeSellRatioQty(heldQty, 1 / 2))"
+          >1/2</button>
+          <button
+            type="button"
+            class="ratio-btn"
+            @click="qtyStr = String(computeSellRatioQty(heldQty, 1))"
+          >{{ t('adoptDialog.ratioAll') }}</button>
+        </div>
       </div>
 
       <p v-if="side === 'sell' && heldQty != null" class="hint">
@@ -300,6 +319,25 @@ function confirm() {
 }
 .text-input:focus {
   outline: none;
+  border-color: #1677ff;
+}
+.ratio-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.ratio-btn {
+  flex: 1;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ratio-btn:hover {
+  color: #1677ff;
   border-color: #1677ff;
 }
 .hint {

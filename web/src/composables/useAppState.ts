@@ -8,6 +8,7 @@ import type {
   DiagnosisCacheEntry,
   DiagnosisResult,
   EquitySnapshot,
+  InvestmentHorizon,
   LiveSyncPayload,
   PendingOrder,
   PlanType,
@@ -63,7 +64,7 @@ import { t } from '../i18n';
 import { collectAlertsFromRound, createAuthErrorAlert } from '../services/alertService';
 import { calcTradeFee } from '../services/tradingCost';
 import { computePerformance } from '../services/performance';
-import { shouldKeepCachedBandAdvice } from '../utils/bandAdvice';
+import { shouldKeepCachedBandAdvice, shouldKeepCachedLongAdvice } from '../utils/bandAdvice';
 import {
   applyKeyLevelsFromDiagnosis,
   toggleKeyLevelsLock as toggleKlLock,
@@ -456,7 +457,12 @@ function migrateDiagnosis(d: DiagnosisResult): DiagnosisResult | null {
   if (d.buildPositionAdvice) {
     return d;
   }
-  if (d.shortAction && d.bandAction) {
+  // v2.14.0: long-horizon entries carry longAction only.
+  if (d.longAction) {
+    return d;
+  }
+  // v2.13.0+: swing entries may omit shortAction; bandAction alone is valid.
+  if (d.bandAction) {
     return d;
   }
   return null;
@@ -796,22 +802,51 @@ async function refreshCardQuoteAndDiagnosis(
       config.value.initialCapital != null ? availableCash.value : null,
     );
     if (result.ok) {
-      // v2.12.3 intraday band freeze: bandAction is a multi-day recommendation;
-      // keep today's first version while its anchored key levels are stable.
       const today = localDateKey(new Date());
       const cachedDiag = cached?.diagnosis;
-      const keepCachedBand = shouldKeepCachedBandAdvice({
-        cachedBand: cachedDiag?.bandAction,
-        cachedBandDate: cached?.bandDate,
-        today,
-        cachedSupport: cachedDiag?.supportLevel,
-        cachedResistance: cachedDiag?.resistanceLevel,
-        newSupport: result.data.supportLevel,
-        newResistance: result.data.resistanceLevel,
-      });
-      const diagnosis = keepCachedBand
-        ? { ...result.data, bandAction: cachedDiag!.bandAction }
-        : result.data;
+      const horizon: InvestmentHorizon = config.value.investmentHorizon ?? 'short';
+      let diagnosis: DiagnosisResult;
+      let keepCachedBand = false;
+      if (horizon === 'long') {
+        // v2.14.0 cross-day long freeze: 长期策略跨日稳定——"看涨就不管今天的
+        // 涨跌继续持有"。仅当锚定关键位实质变化、或价格真实穿越锚定区间时更新。
+        const keepCachedLong = shouldKeepCachedLongAdvice({
+          cachedLong: cachedDiag?.longAction,
+          cachedSupport: cachedDiag?.supportLevel,
+          cachedResistance: cachedDiag?.resistanceLevel,
+          newSupport: result.data.supportLevel,
+          newResistance: result.data.resistanceLevel,
+          price: card.snapshot?.price,
+        });
+        diagnosis = keepCachedLong
+          ? {
+              ...result.data,
+              longAction: cachedDiag!.longAction,
+              longPlan: cachedDiag!.longPlan ?? null,
+            }
+          : result.data;
+      } else {
+        // v2.12.3 intraday band freeze: bandAction is a multi-day recommendation;
+        // keep today's first version while its anchored key levels are stable.
+        // v2.14.0: the cached bandPlan travels with the frozen text so the
+        // adopted order stays consistent with the frozen advice.
+        keepCachedBand = shouldKeepCachedBandAdvice({
+          cachedBand: cachedDiag?.bandAction,
+          cachedBandDate: cached?.bandDate,
+          today,
+          cachedSupport: cachedDiag?.supportLevel,
+          cachedResistance: cachedDiag?.resistanceLevel,
+          newSupport: result.data.supportLevel,
+          newResistance: result.data.resistanceLevel,
+        });
+        diagnosis = keepCachedBand
+          ? {
+              ...result.data,
+              bandAction: cachedDiag!.bandAction,
+              bandPlan: cachedDiag!.bandPlan ?? null,
+            }
+          : result.data;
+      }
       const updatedAt = formatTimeHms();
       card.diagnosis = diagnosis;
       card.updatedAt = updatedAt;
@@ -943,6 +978,7 @@ function buildLiveSyncPayload(): LiveSyncPayload {
       groups: config.value.groups ? [...config.value.groups] : undefined,
       apiKey: config.value.apiKey,
       watchlist: config.value.watchlist.map((w) => ({ ...w })),
+      investmentHorizon: config.value.investmentHorizon,
     },
     cards: cards.value.map((c) => ({
       ...c,
@@ -1345,6 +1381,9 @@ export function useAppState() {
     }
     if (planType === 'band') {
       return d.bandPlan;
+    }
+    if (planType === 'long') {
+      return d.longPlan;
     }
     return d.buildPlan;
   }

@@ -16,6 +16,7 @@ const {
   toasts,
   runRefreshSymbol,
   bootstrap,
+  config,
 } = useAppState();
 
 const widgetReady = computed(() => canShowWidget(pinnedCodes.value));
@@ -99,6 +100,7 @@ onMounted(() => {
           v-for="card in pinnedCards"
           :key="card.stock.code"
           :card="card"
+          :horizon="config.investmentHorizon ?? 'short'"
           widget-mode
           @refresh="runRefreshSymbol"
         />

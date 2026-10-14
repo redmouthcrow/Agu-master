@@ -253,6 +253,7 @@ onMounted(() => {
                 :total-capital="config.totalCapital"
                 :pending-orders="pendingOrders"
                 :available-cash="availableCash"
+                :horizon="config.investmentHorizon ?? 'short'"
                 @remove="removeSymbol"
                 @refresh="runRefreshSymbol"
                 @update-position="updateSymbolPosition"
@@ -262,7 +263,7 @@ onMounted(() => {
                 @cycle-refresh-mode="(code: string) => { cycleRefreshMode(code); }"
                 @set-group="(code: string, groupId: string | undefined) => { setSecurityGroup(code, groupId); }"
                 @adopt-plan="adoptPlan"
-                @cancel-plan="(code: string, planType: 'short' | 'band' | 'build') => { cancelOrderForPlan(code, planType); }"
+                @cancel-plan="cancelOrderForPlan"
                 @toast="showToast"
               />
             </div>
@@ -279,6 +280,7 @@ onMounted(() => {
     :stats="performanceStats"
     :snapshots="equitySnapshots"
     :skipped="snapshotSkipped"
+    :horizon="config.investmentHorizon ?? 'short'"
     @close="perfOpen = false"
   />
 </template>

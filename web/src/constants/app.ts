@@ -1,2 +1,2 @@
 export const APP_NAME = 'AguMaster';
-export const APP_VERSION = '2.13.1';
+export const APP_VERSION = '2.14.0';

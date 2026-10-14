@@ -3,6 +3,7 @@ import type {
   ActionPlan,
   AppConfig,
   DiagnosisResult,
+  InvestmentHorizon,
   QuoteSnapshot,
   SessionLabel,
   WatchlistItem,
@@ -50,7 +51,7 @@ const SYSTEM_PROMPT_BASE = `# Role
 # Forward-Looking Analysis (前瞻分析)
 你必须基于日内数据与近7日走势做出前瞻性判断：
 - 根据日内振幅（high-low）、当前价在日内区间的位置（positionInRange）、较昨收涨跌方向、量能水平，推断当日最可能的走势方向（偏多上行 / 偏空下行 / 窄幅震荡）
-- 结合近7日收盘价走势（见 User Message），判断短期趋势（上行/下行/横盘），并在 analysis 中体现
+- 结合 User Message 中的近段收盘价走势（短线/波段为近7日，长期为近20日），判断趋势方向（上行/下行/横盘），并在 analysis 中体现
 - bandAction / buildPositionAdvice 中给出基于关键位与近期趋势的未来 3-5 个交易日波段预判
 - risk 中指出判断错误的关键破位条件
 
@@ -89,6 +90,50 @@ JSON 格式：
   "resistanceLevel": 6.85
 }`;
 
+const SYSTEM_PROMPT_SWING_POSITION = `${SYSTEM_PROMPT_BASE}
+
+# Position Context (持仓上下文)
+**字段互斥（最高优先级，覆盖上方 Output Format）**：已持仓时禁止输出 buildPositionAdvice 和 buildPlan 字段（那是空仓用户专用的建仓建议）。只按本节下方的 JSON 格式输出。
+用户投资周期为**波段**：以数日到两周的波段操作为核心，短线操作仅作辅助。
+- bandAction（必填，≤40字）：波段建议，必须锚定 supportLevel / resistanceLevel 与当前价的位置关系，给出加/减仓方向与条件。
+- shortAction（**可选**，≤40字）：仅当存在明确、值得当天执行的短线机会时输出，且必须包含具体数量；若无明显机会或建议继续持有时输出 null——不要为了填字段而制造操作。严禁对微小浮动盈亏（pnlPct 绝对值 < 2%）给出减仓建议。
+- 结构化指令：bandPlan / shortPlan —— 仅当对应建议明确含**具体数量与触发价位**时输出（减仓/清仓 side="sell"、condition="gte"；加仓 side="buy"、condition="lte"）。无明确数量或价位时输出 null，严禁编造。卖出 qty 不得超过持仓数量；买入金额不得超过可用资金。
+
+JSON 格式：
+{
+  "signal": "4字标准标签",
+  "analysis": "高密度量价技术面诊断（不超过50字）",
+  "risk": "明确的破位或衰竭风险预测（不超过50字）",
+  "bandAction": "锚定关键位的波段建议(含仓位指引,不超过40字)",
+  "bandPlan": {"side":"buy","qty":1000,"triggerPrice":6.15,"condition":"lte"},
+  "shortAction": "短线操作(含具体数量)或 null",
+  "shortPlan": {"side":"sell","qty":500,"triggerPrice":6.65,"condition":"gte"},
+  "supportLevel": 6.12,
+  "resistanceLevel": 6.85
+}`;
+
+const SYSTEM_PROMPT_LONG_POSITION = `${SYSTEM_PROMPT_BASE}
+
+# Position Context (长期持仓策略)
+**字段互斥（最高优先级，覆盖上方 Output Format）**：用户投资周期为**长期**（数周到数月），已持仓时**只输出 longAction / longPlan**——禁止输出 shortAction、bandAction、buildPositionAdvice 及其对应 plan 字段。只按本节下方的 JSON 格式输出。
+- longAction（必填，≤60字）：一句话给出「中期趋势判断 + 持有或减仓动作 + 离场/重估条件」，必须锚定 supportLevel / resistanceLevel。范例：
+  - 「中期趋势未破坏，继续持有，忽略日内波动；仅当跌破 6.12 时减配」
+  - 「中期结构转弱，建议反弹至 6.85 减仓三分之一；若直接跌破 6.12 则清仓离场」
+- **判断必须基于中期结构（趋势方向、关键位得失、量价配合）而非当日涨跌；当日波动本身不构成改变建议的理由。** 中期趋势向上时明确给出「继续持有、无需操作」的结论。
+- longPlan（可选）：仅当 longAction 明确包含**具体数量与触发价位**时输出（减仓/清仓 side="sell"；跌破卖出 condition="lte"、反弹卖出 condition="gte"；加仓 side="buy"、condition="lte"）。无明确数量或价位时输出 null，严禁编造。卖出 qty 不得超过持仓数量；买入金额不得超过可用资金。
+- signal 仍取五个标准标签；长期视角下通常为「多头持股」或「持股观望」，仅在趋势破坏时给出「逢高减仓」。
+
+JSON 格式：
+{
+  "signal": "4字标准标签",
+  "analysis": "中期结构诊断（不超过50字）",
+  "risk": "明确的趋势破坏风险预测（不超过50字）",
+  "longAction": "中期趋势判断+持有/减仓动作+离场条件（不超过60字）",
+  "longPlan": {"side":"sell","qty":1000,"triggerPrice":6.12,"condition":"lte"},
+  "supportLevel": 6.12,
+  "resistanceLevel": 6.85
+}`;
+
 const STYLE_LABELS: Record<string, string> = {
   aggressive: '激进',
   neutral: '中立',
@@ -107,6 +152,7 @@ function buildUserMessage(
   investmentStyle: string,
   totalPortfolioValue: number,
   availableCash: number | null,
+  horizon: InvestmentHorizon,
 ): string {
   const volume = formatVolumeForPrompt(snapshot.volume, session);
   const change =
@@ -140,10 +186,12 @@ function buildUserMessage(
 日内: 振幅=${amplitude}, 位置=${positionInRange}%(0=最低,100=最高), 方向=${direction}
 风格: ${STYLE_LABELS[investmentStyle] ?? '中立'}`;
 
-  // v2.7.1: 7-day price history for trend analysis.
-  const histText = formatHistoryText(snapshot.code);
+  // v2.7.1: price history for trend analysis. v2.14.0: depth follows the
+  // horizon — intraday tiers keep 7 days, long-term uses up to 20.
+  const histDays = horizon === 'long' ? 20 : 7;
+  const histText = formatHistoryText(snapshot.code, histDays);
   if (histText) {
-    msg += `\n近7日收盘: ${histText}`;
+    msg += `\n近${histDays}日收盘: ${histText}`;
   }
 
   if (hasPosition(watchlistItem)) {
@@ -230,6 +278,8 @@ export async function runDiagnosis(
   const base = config.baseUrl.replace(/\/$/, '');
   const style = config.investmentStyle ?? 'neutral';
   const styleLabel = STYLE_LABELS[style] ?? '中立';
+  // v2.14.0: investment horizon drives the with-position advice contract.
+  const horizon: InvestmentHorizon = config.investmentHorizon ?? 'short';
 
   // Total portfolio: user-specified overrides computed.
   const totalPortfolioValue = config.totalCapital ?? config.watchlist.reduce((sum, w) => {
@@ -237,10 +287,19 @@ export async function runDiagnosis(
     return sum;
   }, 0);
 
-  // Inject style label into the system prompt template.
-  const systemContent = (
-    withPosition ? SYSTEM_PROMPT_WITH_POSITION : SYSTEM_PROMPT_BASE
-  ).replace('{styleLabel}', styleLabel);
+  // Inject style label into the system prompt template. With a position the
+  // horizon picks the contract: short (both actions) / swing (band required,
+  // short optional) / long (longAction only).
+  const withPositionPrompt =
+    horizon === 'long'
+      ? SYSTEM_PROMPT_LONG_POSITION
+      : horizon === 'swing'
+        ? SYSTEM_PROMPT_SWING_POSITION
+        : SYSTEM_PROMPT_WITH_POSITION;
+  const systemContent = (withPosition ? withPositionPrompt : SYSTEM_PROMPT_BASE).replace(
+    '{styleLabel}',
+    styleLabel,
+  );
 
   const body = {
     model: config.model,
@@ -248,7 +307,7 @@ export async function runDiagnosis(
       { role: 'system', content: systemContent },
       {
         role: 'user',
-        content: buildUserMessage(snapshot, watchlistItem, alignedTime, session, style, totalPortfolioValue, availableCash ?? null),
+        content: buildUserMessage(snapshot, watchlistItem, alignedTime, session, style, totalPortfolioValue, availableCash ?? null, horizon),
       },
     ],
     response_format: { type: 'json_object' },
@@ -287,15 +346,33 @@ export async function runDiagnosis(
       return { ok: false, raw };
     }
     if (withPosition) {
-      if (!parsed.shortAction || parsed.shortAction.length > 40) {
-        return { ok: false, raw };
-      }
-      if (
-        !parsed.bandAction ||
-        parsed.bandAction.length > 40 ||
-        !anchorsToKeyLevel(parsed.bandAction, parsed.supportLevel, parsed.resistanceLevel)
-      ) {
-        return { ok: false, raw };
+      if (horizon === 'long') {
+        if (
+          !parsed.longAction ||
+          parsed.longAction.length > 60 ||
+          !anchorsToKeyLevel(parsed.longAction, parsed.supportLevel, parsed.resistanceLevel)
+        ) {
+          return { ok: false, raw };
+        }
+      } else {
+        if (horizon === 'short') {
+          if (!parsed.shortAction || parsed.shortAction.length > 40) {
+            return { ok: false, raw };
+          }
+        } else if (
+          parsed.shortAction != null &&
+          parsed.shortAction !== '' &&
+          parsed.shortAction.length > 40
+        ) {
+          return { ok: false, raw };
+        }
+        if (
+          !parsed.bandAction ||
+          parsed.bandAction.length > 40 ||
+          !anchorsToKeyLevel(parsed.bandAction, parsed.supportLevel, parsed.resistanceLevel)
+        ) {
+          return { ok: false, raw };
+        }
       }
     } else {
       if (
@@ -317,13 +394,17 @@ export async function runDiagnosis(
     // v2.10: sanitize structured orders. Invalid plans are silently dropped —
     // they never fail the diagnosis, the text advice remains.
     if (withPosition) {
-      parsed.shortPlan = sanitizeActionPlan(parsed.shortPlan, watchlistItem.positionQty);
-      parsed.bandPlan = sanitizeActionPlan(parsed.bandPlan, watchlistItem.positionQty);
+      if (horizon === 'long') {
+        parsed.longPlan = sanitizeActionPlan(parsed.longPlan, watchlistItem.positionQty);
+      } else {
+        parsed.shortPlan = sanitizeActionPlan(parsed.shortPlan, watchlistItem.positionQty);
+        parsed.bandPlan = sanitizeActionPlan(parsed.bandPlan, watchlistItem.positionQty);
+      }
     } else {
       parsed.buildPlan = sanitizeActionPlan(parsed.buildPlan);
     }
     // v2.12.4: 剥离另一持仓模式混入的建议字段，保证展示/缓存数据确定性。
-    return { ok: true, data: normalizeDiagnosisByPosition(parsed, withPosition) };
+    return { ok: true, data: normalizeDiagnosisByPosition(parsed, withPosition, horizon) };
   } catch {
     return { ok: false, raw };
   }

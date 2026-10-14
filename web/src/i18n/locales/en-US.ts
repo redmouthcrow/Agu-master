@@ -42,6 +42,14 @@ export const enUS: Record<MessageKey, string> = {
   'card.reusedAt': 'Unchanged · cached {time}',
   'card.namePending': 'Loading name…',
 
+  'config.investmentHorizon': 'Horizon',
+  'config.horizonShort': 'Short (intraday / days)',
+  'config.horizonSwing': 'Swing (days–2 weeks)',
+  'config.horizonLong': 'Long (weeks–months)',
+  'config.horizonHint': 'Shapes the AI advice: long gives mid-term hold/reduce strategy and exit conditions only, ignoring intraday noise; short/swing keep the original format',
+
+  'card.longActionPrefix': 'Long-term: ',
+
   'adoptDialog.title': 'Adopt advice & place order',
   'adoptDialog.side': 'Side',
   'adoptDialog.sideSell': 'Sell',
@@ -58,6 +66,7 @@ export const enUS: Record<MessageKey, string> = {
   'adoptDialog.cashHint': 'Available cash {cash}; buy amount + fee must fit',
   'adoptDialog.measureNote': 'Filled orders feed the performance attribution automatically',
   'adoptDialog.confirm': 'Place order',
+  'adoptDialog.ratioAll': 'All',
   'adoptDialog.errorPrice': 'Enter a valid trigger price (> 0)',
   'adoptDialog.errorQty': 'Quantity must be a positive integer',
   'adoptDialog.errorSellExceeds': 'Sell quantity exceeds holding {max} {unit}',
@@ -169,7 +178,9 @@ export const enUS: Record<MessageKey, string> = {
   'perf.planShort': 'Short',
   'perf.planBand': 'Swing',
   'perf.planBuild': 'Entry',
+  'perf.planLong': 'Long',
   'perf.planManual': 'Manual',
+  'perf.longNoTrades': 'Long mode: no sell trades yet — win rate / profit factor appear after the first sell',
   'perf.scopeNote': 'Realized PnL is ledger scope (fees deducted); win rate / profit factor count adopted sells only.',
 
   'section.watchlist': 'Watchlist ({count}/20)',

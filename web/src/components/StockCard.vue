@@ -5,7 +5,14 @@ const dismissedPlans = new Set<string>();
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { ActionPlan, PendingOrder, PlanType, StockCardState, UserGroup } from '../types';
+import type {
+  ActionPlan,
+  InvestmentHorizon,
+  PendingOrder,
+  PlanType,
+  StockCardState,
+  UserGroup,
+} from '../types';
 import { formatCostPrice, formatPct, formatPrice, getSignalTone } from '../utils/display';
 import { calcPnlPct, hasPosition, parsePositionInputs } from '../utils/position';
 import { adviceForPlan, findCurrentAdviceOrder } from '../utils/pendingAdvice';
@@ -23,6 +30,8 @@ const props = defineProps<{
   pendingOrders?: PendingOrder[];
   /** v2.13.0: available cash for the manual adopt dialog's buy-side check */
   availableCash?: number | null;
+  /** v2.14.0: investment horizon — long shows the longAction row only. */
+  horizon?: InvestmentHorizon;
 }>();
 
 const emit = defineEmits<{
@@ -105,8 +114,14 @@ function planFor(planType: PlanType): ActionPlan | null {
   if (planType === 'band') {
     return d.bandPlan ?? null;
   }
+  if (planType === 'long') {
+    return d.longPlan ?? null;
+  }
   return d.buildPlan ?? null;
 }
+
+/** v2.14.0: undefined behaves as 'short' (backward compatible). */
+const horizonTier = computed<InvestmentHorizon>(() => props.horizon ?? 'short');
 
 function openAdoptDialog(planType: PlanType) {
   adoptPlanType.value = planType;
@@ -512,7 +527,35 @@ const customKeyLevelCount = computed(
           <p class="line-clamp risk-text">
             <span class="tag">{{ t('card.tagRisk') }}</span> {{ card.diagnosis.risk }}
           </p>
-          <template v-if="card.diagnosis.bandAction || card.diagnosis.shortAction">
+          <p
+            v-if="horizonTier === 'long' && card.diagnosis.longAction"
+            class="line-clamp line-clamp-loose action-text"
+          >
+            {{ t('card.longActionPrefix') }}{{ card.diagnosis.longAction }}
+            <span v-if="!widgetMode" class="plan-actions">
+              <template v-if="currentAdviceOrderFor('long')">
+                <button
+                  type="button"
+                  class="plan-chip plan-chip-btn"
+                  :title="t('card.adoptCancelHint')"
+                  @click="emit('cancelPlan', card.stock.code, 'long')"
+                >{{ t('card.adopted') }} {{ orderChipDetail(currentAdviceOrderFor('long')) }} ✕</button>
+              </template>
+              <template v-else-if="!isPlanDismissed('long')">
+                <button
+                  type="button"
+                  class="btn-link btn-link-sm"
+                  @click="openAdoptDialog('long')"
+                >{{ t('card.adopt') }}</button>
+                <button
+                  type="button"
+                  class="btn-link btn-link-sm"
+                  @click="dismissPlan('long')"
+                >{{ t('card.reject') }}</button>
+              </template>
+            </span>
+          </p>
+          <template v-else-if="horizonTier !== 'long' && (card.diagnosis.bandAction || card.diagnosis.shortAction)">
             <p v-if="card.diagnosis.bandAction" class="line-clamp line-clamp-loose action-text">
               {{ t('card.bandActionPrefix') }}{{ card.diagnosis.bandAction }}
               <span v-if="!widgetMode" class="plan-actions">

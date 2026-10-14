@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildManualPlan,
+  computeSellRatioQty,
   inferAdviceCondition,
   inferAdviceSide,
   parseAdvicePrices,
@@ -146,5 +147,37 @@ describe('buildManualPlan', () => {
     expect(r).toEqual({
       plan: { side: 'buy', qty: 500, triggerPrice: 1.44, condition: 'lte' },
     });
+  });
+});
+
+describe('computeSellRatioQty', () => {
+  it('1/3 向下取整到 100 的整数倍', () => {
+    expect(computeSellRatioQty(3000, 1 / 3)).toBe(1000);
+    expect(computeSellRatioQty(3100, 1 / 3)).toBe(1000);
+  });
+
+  it('1/2 向下取整到 100 的整数倍', () => {
+    expect(computeSellRatioQty(2500, 1 / 2)).toBe(1200);
+    expect(computeSellRatioQty(2800, 1 / 2)).toBe(1400);
+  });
+
+  it('比例结果不足 100 时给足 100', () => {
+    expect(computeSellRatioQty(250, 1 / 3)).toBe(100);
+    expect(computeSellRatioQty(250, 1 / 2)).toBe(100);
+  });
+
+  it('持仓不足 100 时按全部持仓', () => {
+    expect(computeSellRatioQty(60, 1 / 2)).toBe(60);
+  });
+
+  it('ratio ≥ 1（全部）返回完整持仓（允许零股清仓）', () => {
+    expect(computeSellRatioQty(2350, 1)).toBe(2350);
+    expect(computeSellRatioQty(150, 1)).toBe(150);
+  });
+
+  it('持仓无效返回 0', () => {
+    expect(computeSellRatioQty(0, 1 / 2)).toBe(0);
+    expect(computeSellRatioQty(NaN, 1 / 2)).toBe(0);
+    expect(computeSellRatioQty(-100, 1 / 2)).toBe(0);
   });
 });

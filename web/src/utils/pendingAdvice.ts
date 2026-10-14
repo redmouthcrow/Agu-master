@@ -21,6 +21,9 @@ export function adviceForPlan(
   if (planType === 'short') {
     return diagnosis.shortAction ?? '';
   }
+  if (planType === 'long') {
+    return diagnosis.longAction ?? '';
+  }
   return diagnosis.buildPositionAdvice ?? '';
 }
 

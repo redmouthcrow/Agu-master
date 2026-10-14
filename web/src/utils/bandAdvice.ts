@@ -51,3 +51,46 @@ export function shouldKeepCachedBandAdvice(input: BandFreezeInput): boolean {
   }
   return true;
 }
+
+export interface LongFreezeInput {
+  cachedLong?: string;
+  cachedSupport?: number;
+  cachedResistance?: number;
+  newSupport?: number;
+  newResistance?: number;
+  /** Current price — used to detect that an anchored level was crossed. */
+  price?: number | null;
+}
+
+/**
+ * Cross-day freeze for long-horizon advice (v2.14.0).
+ *
+ * 长期策略的目标是"看涨就不管今天的涨跌继续持有"——建议必须跨日稳定，
+ * 否则日内噪声每天都会改口。缓存建议只在两种情况下让位给新建议：
+ *  1. 锚定的 support/resistance 发生实质变化（>0.5%，与波段冻结同阈值）；
+ *  2. 当前价已真实穿越锚定区间（price < support 或 price > resistance）
+ *     ——即建议中的离场/重估条件可能已经触发。
+ * 与波段冻结不同，不要求同日（这是跨日稳定特性本身）。
+ */
+export function shouldKeepCachedLongAdvice(input: LongFreezeInput): boolean {
+  if (!input.cachedLong) {
+    return false;
+  }
+  if (levelMateriallyChanged(input.cachedSupport, input.newSupport)) {
+    return false;
+  }
+  if (levelMateriallyChanged(input.cachedResistance, input.newResistance)) {
+    return false;
+  }
+  const price = input.price;
+  if (price != null && Number.isFinite(price)) {
+    const { cachedSupport: s, cachedResistance: r } = input;
+    if (s != null && price < s) {
+      return false;
+    }
+    if (r != null && price > r) {
+      return false;
+    }
+  }
+  return true;
+}

@@ -36,6 +36,11 @@ describe('adviceForPlan', () => {
     expect(adviceForPlan(d, 'build')).toBe('轻仓试多5手');
   });
 
+  it('long 类型返回长期策略（v2.14.0）', () => {
+    const d: DiagnosisResult = { ...diagnosis, longAction: '中期趋势未破坏，继续持有' };
+    expect(adviceForPlan(d, 'long')).toBe('中期趋势未破坏，继续持有');
+  });
+
   it('诊断为空或字段缺失返回空串', () => {
     expect(adviceForPlan(null, 'band')).toBe('');
     expect(adviceForPlan({ signal: 'x', analysis: 'y', risk: 'z' }, 'band')).toBe('');

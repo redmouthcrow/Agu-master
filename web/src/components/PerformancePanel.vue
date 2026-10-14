@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { EquitySnapshot, PerformanceStats } from '../types';
+import type { EquitySnapshot, InvestmentHorizon, PerformanceStats } from '../types';
 import { useI18n } from '../i18n';
 
 const props = defineProps<{
   stats: PerformanceStats;
   snapshots: EquitySnapshot[];
   skipped: boolean;
+  /** v2.14.0: long mode shows a note when trade-level metrics have no samples. */
+  horizon?: InvestmentHorizon;
 }>();
 
 const emit = defineEmits<{ close: [] }>();
@@ -56,6 +58,7 @@ const attributionLabels: Record<string, string> = {
   short: 'perf.planShort',
   band: 'perf.planBand',
   build: 'perf.planBuild',
+  long: 'perf.planLong',
   manual: 'perf.planManual',
 };
 </script>
@@ -96,6 +99,12 @@ const attributionLabels: Record<string, string> = {
             <span class="metric-value">{{ stats.profitFactor == null ? '—' : stats.profitFactor.toFixed(2) }}</span>
           </div>
         </div>
+
+        <!-- v2.14.0: 长期模式且尚无卖出成交 → 说明交易级指标为何为空 -->
+        <div
+          v-if="horizon === 'long' && stats.winRate == null"
+          class="perf-notice"
+        >{{ t('perf.longNoTrades') }}</div>
 
         <!-- 跳过提示 -->
         <div v-if="skipped" class="perf-notice">{{ t('perf.skippedDay') }}</div>

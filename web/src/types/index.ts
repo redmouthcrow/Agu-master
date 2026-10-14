@@ -81,7 +81,10 @@ export interface ActionPlan {
   condition: 'gte' | 'lte';
 }
 
-export type PlanType = 'short' | 'band' | 'build';
+export type PlanType = 'short' | 'band' | 'build' | 'long';
+
+/** v2.14.0: investment horizon tier — drives the advice contract per position mode. */
+export type InvestmentHorizon = 'short' | 'swing' | 'long';
 
 /** v2.10: pending order created when the user adopts an ActionPlan. */
 export interface PendingOrder {
@@ -186,6 +189,14 @@ export interface AppConfig {
   refreshFrequency: RefreshFrequency;
   /** Global investment style (v2.7): aggressive | neutral | conservative. */
   investmentStyle?: 'aggressive' | 'neutral' | 'conservative';
+  /**
+   * v2.14.0: investment horizon — orthogonal to style. Affects the advice
+   * contract: short (shortAction+bandAction, current behavior) | swing
+   * (bandAction required, shortAction optional) | long (longAction only —
+   * mid-term trend call + hold/reduce action + exit condition, cross-day frozen).
+   * Undefined behaves as 'short' (backward compatible).
+   */
+  investmentHorizon?: InvestmentHorizon;
   /** v2.9: User-specified total portfolio capital (元). If set, overrides computed total for position weighting. */
   totalCapital?: number;
   /** v2.10: Simulated account principal (元). Required before adopting buy plans. */
@@ -229,12 +240,16 @@ export interface DiagnosisResult {
   shortAction?: string;
   /** 建仓建议（v2.6 新增；仅当未配置持仓时由 LLM 输出，须锚定 supportLevel/resistanceLevel）。 */
   buildPositionAdvice?: string;
+  /** 长期策略（v2.14.0；仅当持仓且投资周期=长期时输出：中期趋势判断+持有/减仓动作+离场条件）。 */
+  longAction?: string;
   /** v2.10: structured order corresponding to shortAction (with position only). */
   shortPlan?: ActionPlan | null;
   /** v2.10: structured order corresponding to bandAction (with position only). */
   bandPlan?: ActionPlan | null;
   /** v2.10: structured order corresponding to buildPositionAdvice (no position). */
   buildPlan?: ActionPlan | null;
+  /** v2.14.0: structured order corresponding to longAction (long horizon only). */
+  longPlan?: ActionPlan | null;
   supportLevel?: number;
   resistanceLevel?: number;
 }
@@ -299,6 +314,7 @@ export interface LiveSyncPayload {
     | 'groups'
     | 'apiKey'
     | 'watchlist'
+    | 'investmentHorizon'
   >;
   cards: StockCardState[];
 }

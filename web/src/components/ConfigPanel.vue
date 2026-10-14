@@ -256,6 +256,19 @@ function onAlwaysOnTopChange(e: Event) {
         </select>
       </label>
       <label class="field">
+        <span>{{ t('config.investmentHorizon') }}</span>
+        <select
+          :value="config.investmentHorizon ?? 'short'"
+          class="field-select"
+          @change="emit('save', { investmentHorizon: ($event.target as HTMLSelectElement).value as AppConfig['investmentHorizon'] })"
+        >
+          <option value="short">{{ t('config.horizonShort') }}</option>
+          <option value="swing">{{ t('config.horizonSwing') }}</option>
+          <option value="long">{{ t('config.horizonLong') }}</option>
+        </select>
+        <span class="field-hint">{{ t('config.horizonHint') }}</span>
+      </label>
+      <label class="field">
         <span>总仓位金额(元)</span>
         <input
           type="number"

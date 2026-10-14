@@ -40,6 +40,14 @@ export const zhCN = {
   'card.reusedAt': '行情未变·沿用 {time}',
   'card.namePending': '获取名称中…',
 
+  'config.investmentHorizon': '投资周期',
+  'config.horizonShort': '短线（日内/数日）',
+  'config.horizonSwing': '波段（数日~两周）',
+  'config.horizonLong': '长期（数周~数月）',
+  'config.horizonHint': '决定 AI 建议的形态：长期模式只给中期持有/减仓策略与离场条件，忽略日内波动；短期/波段沿用原建议',
+
+  'card.longActionPrefix': '长期策略：',
+
   'adoptDialog.title': '采纳建议并挂单',
   'adoptDialog.side': '方向',
   'adoptDialog.sideSell': '卖出',
@@ -56,6 +64,7 @@ export const zhCN = {
   'adoptDialog.cashHint': '可用资金 {cash} 元，买入金额与手续费须在额度内',
   'adoptDialog.measureNote': '挂单成交后自动计入绩效归因',
   'adoptDialog.confirm': '确认挂单',
+  'adoptDialog.ratioAll': '全部',
   'adoptDialog.errorPrice': '请填写有效的触发价（大于 0）',
   'adoptDialog.errorQty': '数量须为正整数',
   'adoptDialog.errorSellExceeds': '卖出数量不能超过当前持仓 {max} {unit}',
@@ -166,7 +175,9 @@ export const zhCN = {
   'perf.planShort': '短期',
   'perf.planBand': '波段',
   'perf.planBuild': '建仓',
+  'perf.planLong': '长期',
   'perf.planManual': '手工',
+  'perf.longNoTrades': '长期模式：暂无卖出成交，胜率/盈亏比将在首次卖出成交后出现',
   'perf.scopeNote': '已实现盈亏为流水口径（含手续费），胜率/盈亏比仅统计采纳成交的卖出。',
 
   'section.watchlist': '自选监控 ({count}/20)',

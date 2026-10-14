@@ -122,6 +122,26 @@ export function inferAdviceCondition(
   return side === 'sell' ? 'gte' : 'lte';
 }
 
+/**
+ * v2.14.0: 「卖掉一部分」的比例快捷 —— 按持仓比例算卖出数量。
+ * 1/3、1/2 向下取整到 100 的整数倍（A股/场内基金整手）；不足 100 时给足 100
+ * （持仓不足 100 则全卖）；ratio ≥ 1 → 全部持仓（清仓允许零股）。
+ */
+export function computeSellRatioQty(positionQty: number, ratio: number): number {
+  if (!Number.isFinite(positionQty) || positionQty <= 0) {
+    return 0;
+  }
+  const full = Math.floor(positionQty);
+  if (ratio >= 1) {
+    return full;
+  }
+  const stepped = Math.floor((full * ratio) / 100) * 100;
+  if (stepped > 0) {
+    return stepped;
+  }
+  return Math.min(full, 100);
+}
+
 export type ManualPlanInput = {
   side: AdviceSide;
   condition: AdviceCondition;
