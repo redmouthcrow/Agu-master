@@ -779,6 +779,8 @@ async function refreshCardQuoteAndDiagnosis(
     session,
     card.stock.positionQty,
     card.stock.costPrice,
+    config.value.investmentHorizon ?? 'short',
+    card.stock.actualPnl,
   );
   const cached = getDiagnosisCache()[card.stock.code];
   if (
@@ -1210,6 +1212,11 @@ export function useAppState() {
 
   function saveConfigField(partial: Partial<AppConfig>) {
     const prevFreq = config.value.refreshFrequency;
+    // v2.14.1: 切换投资周期会改变建议契约——旧周期的缓存诊断必须作废，
+    // 否则行情未变/休市时会一直沿用（长期模式将无行可显示）。
+    const horizonChanged =
+      partial.investmentHorizon != null &&
+      partial.investmentHorizon !== config.value.investmentHorizon;
     if (partial.refreshFrequency != null) {
       partial.refreshFrequency = normalizeRefreshFrequency(partial.refreshFrequency);
     }
@@ -1224,6 +1231,19 @@ export function useAppState() {
     }
     config.value = normalizeConfig({ ...config.value, ...partial });
     persistConfig();
+    if (horizonChanged) {
+      const cache = getDiagnosisCache();
+      for (const key of Object.keys(cache)) {
+        delete cache[key];
+      }
+      flushDiagnosisCache();
+      for (const card of cards.value) {
+        card.diagnosis = null;
+        card.updatedAt = null;
+        card.diagnosisReused = false;
+      }
+      cards.value = [...cards.value];
+    }
     applyWidgetWindowSettings();
     broadcastLiveSync();
     if (
@@ -1231,6 +1251,10 @@ export function useAppState() {
       partial.refreshFrequency !== prevFreq
     ) {
       restartScheduler();
+    }
+    if (horizonChanged) {
+      // 立即按新契约重新诊断（行情未变也会重新调用——指纹含周期）。
+      void runRefresh(false);
     }
   }
 
