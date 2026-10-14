@@ -1,4 +1,4 @@
-import type { DiagnosisResult, PendingOrder, PlanType } from '../types';
+import type { DiagnosisResult, InvestmentHorizon, PendingOrder, PlanType } from '../types';
 
 /**
  * v2.13.1: 「已挂单」chip 的归属判定。
@@ -25,6 +25,38 @@ export function adviceForPlan(
     return diagnosis.longAction ?? '';
   }
   return diagnosis.buildPositionAdvice ?? '';
+}
+
+/**
+ * v2.14.2: 建议行渲染规则——**数据驱动为主，周期只决定优先族**。
+ * 归一化保证正常数据只有一族建议；当周期与数据不一致（如配置未同步的
+ * 悬浮窗拿到的仍是旧周期）时，回退渲染数据中实际存在的建议族，
+ * 避免"有建议却一行都不显示"。
+ */
+export function shouldShowLongRow(
+  horizon: InvestmentHorizon,
+  d: DiagnosisResult | null | undefined,
+): boolean {
+  if (!d?.longAction) {
+    return false;
+  }
+  if (horizon === 'long') {
+    return true;
+  }
+  return !(d.bandAction || d.shortAction || d.buildPositionAdvice);
+}
+
+export function shouldShowPositionRows(
+  horizon: InvestmentHorizon,
+  d: DiagnosisResult | null | undefined,
+): boolean {
+  if (!d || !(d.bandAction || d.shortAction)) {
+    return false;
+  }
+  if (horizon !== 'long') {
+    return true;
+  }
+  return !d.longAction;
 }
 
 /** 找到"由当前建议挂出、且仍在等待触发"的订单；无匹配返回 undefined。 */

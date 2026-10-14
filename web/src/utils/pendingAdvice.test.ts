@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { adviceForPlan, findCurrentAdviceOrder } from './pendingAdvice';
+import {
+  adviceForPlan,
+  findCurrentAdviceOrder,
+  shouldShowLongRow,
+  shouldShowPositionRows,
+} from './pendingAdvice';
 import type { DiagnosisResult, PendingOrder } from '../types';
 
 const diagnosis: DiagnosisResult = {
@@ -90,5 +95,49 @@ describe('findCurrentAdviceOrder', () => {
     expect(findCurrentAdviceOrder([], 'sh510500', 'band', 'x')).toBeUndefined();
     expect(findCurrentAdviceOrder(undefined, 'sh510500', 'band', 'x')).toBeUndefined();
     expect(findCurrentAdviceOrder([order({})], 'sh510500', 'band', '')).toBeUndefined();
+  });
+});
+
+describe('建议行渲染规则（v2.14.2 数据驱动 + 周期优先）', () => {
+  const longDiag: DiagnosisResult = { ...diagnosis, longAction: '继续持有', bandAction: undefined, shortAction: undefined };
+  const posDiag: DiagnosisResult = diagnosis; // band + short
+  const buildDiag: DiagnosisResult = { signal: 'x', analysis: 'y', risk: 'z', buildPositionAdvice: '轻仓试多' };
+
+  it('long 周期 + 长期数据 → 只显示长期行', () => {
+    expect(shouldShowLongRow('long', longDiag)).toBe(true);
+    expect(shouldShowPositionRows('long', longDiag)).toBe(false);
+  });
+
+  it('short 周期 + 持仓数据 → 只显示波段/短期行', () => {
+    expect(shouldShowLongRow('short', posDiag)).toBe(false);
+    expect(shouldShowPositionRows('short', posDiag)).toBe(true);
+  });
+
+  it('兜底：周期未同步（short）+ 长期数据 → 回退显示长期行（本次悬浮窗 bug）', () => {
+    expect(shouldShowLongRow('short', longDiag)).toBe(true);
+    expect(shouldShowPositionRows('short', longDiag)).toBe(false);
+  });
+
+  it('兜底：周期未同步（long）+ 旧周期数据 → 回退显示波段/短期行', () => {
+    expect(shouldShowLongRow('long', posDiag)).toBe(false);
+    expect(shouldShowPositionRows('long', posDiag)).toBe(true);
+  });
+
+  it('无任何建议字段 → 两族都不渲染', () => {
+    const empty: DiagnosisResult = { signal: 'x', analysis: 'y', risk: 'z' };
+    expect(shouldShowLongRow('long', empty)).toBe(false);
+    expect(shouldShowPositionRows('long', empty)).toBe(false);
+    expect(shouldShowLongRow('short', empty)).toBe(false);
+    expect(shouldShowPositionRows('short', empty)).toBe(false);
+  });
+
+  it('建仓数据不影响长期/持仓行的判断', () => {
+    expect(shouldShowLongRow('short', buildDiag)).toBe(false);
+    expect(shouldShowPositionRows('short', buildDiag)).toBe(false);
+  });
+
+  it('long 周期 + 建仓数据（无持仓卡片切换后）→ 两族都不渲染，由建仓行兜底', () => {
+    expect(shouldShowLongRow('long', buildDiag)).toBe(false);
+    expect(shouldShowPositionRows('long', buildDiag)).toBe(false);
   });
 });

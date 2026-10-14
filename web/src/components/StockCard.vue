@@ -15,7 +15,12 @@ import type {
 } from '../types';
 import { formatCostPrice, formatPct, formatPrice, getSignalTone } from '../utils/display';
 import { calcPnlPct, hasPosition, parsePositionInputs } from '../utils/position';
-import { adviceForPlan, findCurrentAdviceOrder } from '../utils/pendingAdvice';
+import {
+  adviceForPlan,
+  findCurrentAdviceOrder,
+  shouldShowLongRow,
+  shouldShowPositionRows,
+} from '../utils/pendingAdvice';
 import { useI18n } from '../i18n';
 import AdoptPlanDialog from './AdoptPlanDialog.vue';
 
@@ -122,6 +127,15 @@ function planFor(planType: PlanType): ActionPlan | null {
 
 /** v2.14.0: undefined behaves as 'short' (backward compatible). */
 const horizonTier = computed<InvestmentHorizon>(() => props.horizon ?? 'short');
+
+// v2.14.2: 数据驱动渲染——周期只决定优先族；周期与数据不一致时回退渲染
+// 数据中实际存在的建议族，避免"有建议却一行都不显示"（悬浮窗同步缺口）。
+const showLongRow = computed(() =>
+  shouldShowLongRow(horizonTier.value, props.card.diagnosis),
+);
+const showPositionRows = computed(() =>
+  shouldShowPositionRows(horizonTier.value, props.card.diagnosis),
+);
 
 function openAdoptDialog(planType: PlanType) {
   adoptPlanType.value = planType;
@@ -528,7 +542,7 @@ const customKeyLevelCount = computed(
             <span class="tag">{{ t('card.tagRisk') }}</span> {{ card.diagnosis.risk }}
           </p>
           <p
-            v-if="horizonTier === 'long' && card.diagnosis.longAction"
+            v-if="showLongRow"
             class="line-clamp line-clamp-loose action-text"
           >
             {{ t('card.longActionPrefix') }}{{ card.diagnosis.longAction }}
@@ -555,7 +569,7 @@ const customKeyLevelCount = computed(
               </template>
             </span>
           </p>
-          <template v-else-if="horizonTier !== 'long' && (card.diagnosis.bandAction || card.diagnosis.shortAction)">
+          <template v-else-if="showPositionRows">
             <p v-if="card.diagnosis.bandAction" class="line-clamp line-clamp-loose action-text">
               {{ t('card.bandActionPrefix') }}{{ card.diagnosis.bandAction }}
               <span v-if="!widgetMode" class="plan-actions">

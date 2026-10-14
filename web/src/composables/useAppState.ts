@@ -612,6 +612,9 @@ function mergeLiveConfig(
     alertSettings: live.alertSettings ?? base.alertSettings,
     groups: live.groups ?? base.groups,
     apiKey: live.apiKey ?? base.apiKey,
+    // v2.14.2: 投资周期决定渲染哪族建议行——悬浮窗必须同步，否则长期模式下
+    // 诊断只有 longAction，悬浮窗按 short 渲染会一行建议都不显示。
+    investmentHorizon: live.investmentHorizon ?? base.investmentHorizon,
   });
 }
 
