@@ -237,6 +237,8 @@ export interface DiagnosisCacheEntry {
   diagnosis: DiagnosisResult;
   fingerprint: string;
   updatedAt: string;
+  /** v2.12.3: local date key (YYYY-MM-DD) when bandAction was accepted — drives the intraday band freeze. */
+  bandDate?: string;
 }
 
 export type SessionLabel = '交易中' | '集合竞价' | '非交易时段';

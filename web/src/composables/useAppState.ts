@@ -62,6 +62,7 @@ import { t } from '../i18n';
 import { collectAlertsFromRound, createAuthErrorAlert } from '../services/alertService';
 import { calcTradeFee } from '../services/tradingCost';
 import { computePerformance } from '../services/performance';
+import { shouldKeepCachedBandAdvice } from '../utils/bandAdvice';
 import {
   applyKeyLevelsFromDiagnosis,
   toggleKeyLevelsLock as toggleKlLock,
@@ -794,13 +795,30 @@ async function refreshCardQuoteAndDiagnosis(
       config.value.initialCapital != null ? availableCash.value : null,
     );
     if (result.ok) {
+      // v2.12.3 intraday band freeze: bandAction is a multi-day recommendation;
+      // keep today's first version while its anchored key levels are stable.
+      const today = localDateKey(new Date());
+      const cachedDiag = cached?.diagnosis;
+      const keepCachedBand = shouldKeepCachedBandAdvice({
+        cachedBand: cachedDiag?.bandAction,
+        cachedBandDate: cached?.bandDate,
+        today,
+        cachedSupport: cachedDiag?.supportLevel,
+        cachedResistance: cachedDiag?.resistanceLevel,
+        newSupport: result.data.supportLevel,
+        newResistance: result.data.resistanceLevel,
+      });
+      const diagnosis = keepCachedBand
+        ? { ...result.data, bandAction: cachedDiag!.bandAction }
+        : result.data;
       const updatedAt = formatTimeHms();
-      card.diagnosis = result.data;
+      card.diagnosis = diagnosis;
       card.updatedAt = updatedAt;
       persistDiagnosisEntry(card.stock.code, {
-        diagnosis: result.data,
+        diagnosis,
         fingerprint,
         updatedAt,
+        bandDate: diagnosis.bandAction ? (keepCachedBand ? cached?.bandDate : today) : undefined,
       });
       applyKeyLevelsFromDiagnosis(
         card.stock,

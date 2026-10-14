@@ -382,6 +382,7 @@
   - **已实现盈利（actualPnl > 0）**：核心目标**扩大盈利**——趋势支持则持有/加仓扩盈；衰竭信号（放量滞涨/顶背离）则分批止盈锁利
   - **风格叠加**：激进风格允许更大的回本博弈（补仓摊薄）；保守风格亏损更早止损、盈利更早锁盈
   - 无 `actualPnl` 数据时按常规持仓逻辑
+- **波段建议日内冻结（v2.12.3）**：`bandAction` 为多日建议，当日首次诊断生成后盘中沿用；仅当 `supportLevel`/`resistanceLevel` 相对偏离 > 0.5% 才盘中替换（`DiagnosisCacheEntry.bandDate` 记录采纳日期）
 - `signal` 配色规则见 UI-Spec；卡片操作建议展示规则（v2.6）：
   - **有持仓**：Content 区 Risk 行下方依次展示「波段建议：{bandAction}」「短期建议：{shortAction}」
   - **无持仓（观望）**：Content 区 Risk 行下方展示「建仓建议：{buildPositionAdvice}」，不渲染 bandAction / shortAction 行
@@ -1234,7 +1235,7 @@ AI: {"signal":"持股观望","analysis":"缩量震荡","risk":"跟踪误差放�
 
 ---
 
-**文档版本**：2.12.2
+**文档版本**：2.12.3
 
 **最后更新**：2026-10-14
 
