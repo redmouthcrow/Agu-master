@@ -200,7 +200,7 @@ export const zhCN = {
   'toast.quoteFailedOne': '{name} 行情获取失败',
   'toast.widgetPinMax': '悬浮窗最多钉选 {max} 只',
   'toast.orderAdopted': '已挂单：{detail}',
-  'toast.orderAlreadyPending': '该建议已挂单，可在配置面板撤销',
+  'toast.orderReplaced': '已替换原挂单：{detail}',
   'toast.orderFilled': '已成交：{detail}',
   'toast.orderRejected': '订单被拒绝：{detail}',
   'toast.orderCancelled': '已撤销挂单',

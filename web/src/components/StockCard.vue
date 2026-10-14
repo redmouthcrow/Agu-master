@@ -8,6 +8,7 @@ import { computed, ref, watch } from 'vue';
 import type { ActionPlan, PendingOrder, PlanType, StockCardState, UserGroup } from '../types';
 import { formatCostPrice, formatPct, formatPrice, getSignalTone } from '../utils/display';
 import { calcPnlPct, hasPosition, parsePositionInputs } from '../utils/position';
+import { adviceForPlan, findCurrentAdviceOrder } from '../utils/pendingAdvice';
 import { useI18n } from '../i18n';
 import AdoptPlanDialog from './AdoptPlanDialog.vue';
 
@@ -54,15 +55,28 @@ watch(
   },
 );
 
-function isPlanPending(planType: PlanType): boolean {
+/**
+ * v2.13.1: 返回"由当前建议挂出、仍在等待触发"的订单。
+ * 建议文本变化后旧挂单的 chip 自动让位给新的采纳/不采纳入口。
+ */
+function currentAdviceOrderFor(planType: PlanType): PendingOrder | null {
   return (
-    props.pendingOrders?.some(
-      (o) =>
-        o.code === props.card.stock.code &&
-        o.planType === planType &&
-        o.status === 'pending',
-    ) ?? false
+    findCurrentAdviceOrder(
+      props.pendingOrders,
+      props.card.stock.code,
+      planType,
+      adviceFor(planType),
+    ) ?? null
   );
+}
+
+/** chip 上的订单明细：方向 + 数量 @ 触发价。 */
+function orderChipDetail(order: PendingOrder | null | undefined): string {
+  if (!order) {
+    return '';
+  }
+  const side = order.plan.side === 'sell' ? t('trade.sell') : t('trade.buy');
+  return `${side}${order.plan.qty}@${order.plan.triggerPrice.toFixed(3)}`;
 }
 
 function isPlanDismissed(planType: PlanType): boolean {
@@ -77,17 +91,7 @@ function dismissPlan(planType: PlanType) {
 const adoptPlanType = ref<PlanType | null>(null);
 
 function adviceFor(planType: PlanType): string {
-  const d = props.card.diagnosis;
-  if (!d) {
-    return '';
-  }
-  if (planType === 'band') {
-    return d.bandAction ?? '';
-  }
-  if (planType === 'short') {
-    return d.shortAction ?? '';
-  }
-  return d.buildPositionAdvice ?? '';
+  return adviceForPlan(props.card.diagnosis, planType);
 }
 
 function planFor(planType: PlanType): ActionPlan | null {
@@ -512,13 +516,13 @@ const customKeyLevelCount = computed(
             <p v-if="card.diagnosis.bandAction" class="line-clamp line-clamp-loose action-text">
               {{ t('card.bandActionPrefix') }}{{ card.diagnosis.bandAction }}
               <span v-if="!widgetMode" class="plan-actions">
-                <template v-if="isPlanPending('band')">
+                <template v-if="currentAdviceOrderFor('band')">
                   <button
                     type="button"
                     class="plan-chip plan-chip-btn"
                     :title="t('card.adoptCancelHint')"
                     @click="emit('cancelPlan', card.stock.code, 'band')"
-                  >{{ t('card.adopted') }} ✕</button>
+                  >{{ t('card.adopted') }} {{ orderChipDetail(currentAdviceOrderFor('band')) }} ✕</button>
                 </template>
                 <template v-else-if="!isPlanDismissed('band')">
                   <button
@@ -537,13 +541,13 @@ const customKeyLevelCount = computed(
             <p v-if="card.diagnosis.shortAction" class="line-clamp line-clamp-loose action-text">
               {{ t('card.shortActionPrefix') }}{{ card.diagnosis.shortAction }}
               <span v-if="!widgetMode" class="plan-actions">
-                <template v-if="isPlanPending('short')">
+                <template v-if="currentAdviceOrderFor('short')">
                   <button
                     type="button"
                     class="plan-chip plan-chip-btn"
                     :title="t('card.adoptCancelHint')"
                     @click="emit('cancelPlan', card.stock.code, 'short')"
-                  >{{ t('card.adopted') }} ✕</button>
+                  >{{ t('card.adopted') }} {{ orderChipDetail(currentAdviceOrderFor('short')) }} ✕</button>
                 </template>
                 <template v-else-if="!isPlanDismissed('short')">
                   <button
@@ -563,13 +567,13 @@ const customKeyLevelCount = computed(
           <p v-else-if="card.diagnosis.buildPositionAdvice" class="line-clamp line-clamp-loose action-text">
             {{ t('card.buildPositionAdvicePrefix') }}{{ card.diagnosis.buildPositionAdvice }}
             <span v-if="!widgetMode" class="plan-actions">
-              <template v-if="isPlanPending('build')">
+              <template v-if="currentAdviceOrderFor('build')">
                 <button
                   type="button"
                   class="plan-chip plan-chip-btn"
                   :title="t('card.adoptCancelHint')"
                   @click="emit('cancelPlan', card.stock.code, 'build')"
-                >{{ t('card.adopted') }} ✕</button>
+                >{{ t('card.adopted') }} {{ orderChipDetail(currentAdviceOrderFor('build')) }} ✕</button>
               </template>
               <template v-else-if="!isPlanDismissed('build')">
                 <button

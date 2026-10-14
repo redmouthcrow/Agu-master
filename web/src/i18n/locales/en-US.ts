@@ -203,7 +203,7 @@ export const enUS: Record<MessageKey, string> = {
   'toast.quoteFailedOne': '{name}: quote fetch failed',
   'toast.widgetPinMax': 'Widget allows at most {max} pins',
   'toast.orderAdopted': 'Order placed: {detail}',
-  'toast.orderAlreadyPending': 'Already pending; cancel it in settings',
+  'toast.orderReplaced': 'Replaced pending order: {detail}',
   'toast.orderFilled': 'Filled: {detail}',
   'toast.orderRejected': 'Order rejected: {detail}',
   'toast.orderCancelled': 'Order cancelled',

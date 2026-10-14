@@ -22,6 +22,7 @@ import { MAX_OVERCLOCK, MAX_SECURITIES } from '../types';
 import { getItem, isStorageAvailable, setItem, activateDesktopStorageMirror, setDesktopMirrorEntry, registerDesktopFilePersist, registerDesktopCalendarCleanup, collectLegacyStorageForMigration } from '../utils/storage';
 import { inferInstrumentType, normalizeWatchlistSymbol } from '../utils/stockCode';
 import { buildSnapshotFingerprint } from '../utils/snapshotFingerprint';
+import { adviceForPlan } from '../utils/pendingAdvice';
 import {
   formatTimeHms,
   getAlignedTimeLabel,
@@ -1360,14 +1361,6 @@ export function useAppState() {
     if (!plan) {
       return false;
     }
-    if (
-      pendingOrders.value.some(
-        (o) => o.code === code && o.planType === planType && o.status === 'pending',
-      )
-    ) {
-      showToast(t('toast.orderAlreadyPending'));
-      return false;
-    }
     if (plan.side === 'sell') {
       if (!hasPosition(item) || item.positionQty! < plan.qty) {
         showToast(t('toast.sellQtyExceeds'));
@@ -1386,6 +1379,13 @@ export function useAppState() {
         return false;
       }
     }
+    // v2.13.1: 同一建议行再次采纳 → 替换原挂单（撤旧挂新），不再拒绝。
+    const existing = pendingOrders.value.filter(
+      (o) => o.code === code && o.planType === planType && o.status === 'pending',
+    );
+    for (const o of existing) {
+      o.status = 'cancelled';
+    }
     pendingOrders.value.push({
       id: `po_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       code,
@@ -1394,12 +1394,17 @@ export function useAppState() {
       planType,
       // v2.12: capture the signal at adopt time for attribution.
       signal: card.diagnosis?.signal,
+      // v2.13.1: bind the order to the advice it was adopted from (chip gating).
+      sourceAdvice: adviceForPlan(card.diagnosis, planType),
       createdAt: new Date().toISOString(),
       status: 'pending',
     });
     persistOrdersAndTrades();
+    const detail = planDetailLabel(plan, item.instrumentType);
     showToast(
-      t('toast.orderAdopted', { detail: planDetailLabel(plan, item.instrumentType) }),
+      existing.length > 0
+        ? t('toast.orderReplaced', { detail })
+        : t('toast.orderAdopted', { detail }),
     );
     return true;
   }

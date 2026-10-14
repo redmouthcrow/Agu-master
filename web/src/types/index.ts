@@ -92,6 +92,12 @@ export interface PendingOrder {
   planType: PlanType;
   /** v2.12: signal captured at adopt time, for attribution. */
   signal?: string;
+  /**
+   * v2.13.1: advice text this order was adopted from. The card's 「已挂单」chip
+   * shows only while it matches the currently displayed advice — a changed
+   * suggestion re-offers 采纳/不采纳 (adopting again replaces this order).
+   */
+  sourceAdvice?: string;
   createdAt: string;
   status: 'pending' | 'filled' | 'cancelled' | 'rejected';
   filledAt?: string;
