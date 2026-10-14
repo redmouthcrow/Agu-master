@@ -17,6 +17,7 @@
 - `Product-Spec.md`（文档版本 + 功能状态）
 - `Product-Spec-CHANGELOG.md`（变更条目）
 - `README.md`（用户可见功能说明）
+- `web/src/components/AboutModal.vue`（「关于 AguMaster」更新日志：**每次版本号变更必须同步新增/修订对应条目**，新版本在最前）
 - Bug 修复 → 第三位 +1；新增功能 → 第二位 +1
 
 **规则：每次修改完成后，必须打包 Windows 安装包：**
