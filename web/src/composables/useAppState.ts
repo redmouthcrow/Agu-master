@@ -1349,13 +1349,14 @@ export function useAppState() {
   }
 
   /** Adopt an AI structured order → pending order. Validates at listing time. */
-  function adoptPlan(code: string, planType: PlanType): boolean {
+  function adoptPlan(code: string, planType: PlanType, manualPlan?: ActionPlan): boolean {
     const card = cards.value.find((c) => c.stock.code === code);
     const item = config.value.watchlist.find((w) => w.code === code);
     if (!card || !item) {
       return false;
     }
-    const plan = planOf(card, planType);
+    // v2.13.0: 弹窗采纳时数量/价位由用户填写（manualPlan），无弹窗时沿用 AI 计划。
+    const plan = manualPlan ?? planOf(card, planType);
     if (!plan) {
       return false;
     }

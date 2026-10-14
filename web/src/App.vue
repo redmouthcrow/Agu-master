@@ -252,6 +252,7 @@ onMounted(() => {
                 :groups="groups"
                 :total-capital="config.totalCapital"
                 :pending-orders="pendingOrders"
+                :available-cash="availableCash"
                 @remove="removeSymbol"
                 @refresh="runRefreshSymbol"
                 @update-position="updateSymbolPosition"
@@ -260,7 +261,7 @@ onMounted(() => {
                 @toggle-key-levels-lock="(code: string) => { toggleKeyLevelsLock(code); }"
                 @cycle-refresh-mode="(code: string) => { cycleRefreshMode(code); }"
                 @set-group="(code: string, groupId: string | undefined) => { setSecurityGroup(code, groupId); }"
-                @adopt-plan="(code: string, planType: 'short' | 'band' | 'build') => { adoptPlan(code, planType); }"
+                @adopt-plan="adoptPlan"
                 @cancel-plan="(code: string, planType: 'short' | 'band' | 'build') => { cancelOrderForPlan(code, planType); }"
                 @toast="showToast"
               />

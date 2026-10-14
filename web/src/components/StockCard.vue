@@ -5,10 +5,11 @@ const dismissedPlans = new Set<string>();
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { PendingOrder, PlanType, StockCardState, UserGroup } from '../types';
+import type { ActionPlan, PendingOrder, PlanType, StockCardState, UserGroup } from '../types';
 import { formatCostPrice, formatPct, formatPrice, getSignalTone } from '../utils/display';
 import { calcPnlPct, hasPosition, parsePositionInputs } from '../utils/position';
 import { useI18n } from '../i18n';
+import AdoptPlanDialog from './AdoptPlanDialog.vue';
 
 const props = defineProps<{
   card: StockCardState;
@@ -19,6 +20,8 @@ const props = defineProps<{
   totalCapital?: number;
   /** v2.10: adopted orders, for the "已挂单" state on suggestion rows */
   pendingOrders?: PendingOrder[];
+  /** v2.13.0: available cash for the manual adopt dialog's buy-side check */
+  availableCash?: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -31,7 +34,7 @@ const emit = defineEmits<{
   toggleKeyLevelsLock: [code: string];
   cycleRefreshMode: [code: string];
   setGroup: [code: string, groupId: string | undefined];
-  adoptPlan: [code: string, planType: PlanType];
+  adoptPlan: [code: string, planType: PlanType, manualPlan?: ActionPlan];
   rejectPlan: [code: string, planType: PlanType];
   cancelPlan: [code: string, planType: PlanType];
 }>();
@@ -68,6 +71,48 @@ function isPlanDismissed(planType: PlanType): boolean {
 
 function dismissPlan(planType: PlanType) {
   dismissedPlans.add(`${props.card.stock.code}:${planType}`);
+}
+
+// v2.13.0: 半自动采纳 — 点击"采纳"打开弹窗，数量由用户填写。
+const adoptPlanType = ref<PlanType | null>(null);
+
+function adviceFor(planType: PlanType): string {
+  const d = props.card.diagnosis;
+  if (!d) {
+    return '';
+  }
+  if (planType === 'band') {
+    return d.bandAction ?? '';
+  }
+  if (planType === 'short') {
+    return d.shortAction ?? '';
+  }
+  return d.buildPositionAdvice ?? '';
+}
+
+function planFor(planType: PlanType): ActionPlan | null {
+  const d = props.card.diagnosis;
+  if (!d) {
+    return null;
+  }
+  if (planType === 'short') {
+    return d.shortPlan ?? null;
+  }
+  if (planType === 'band') {
+    return d.bandPlan ?? null;
+  }
+  return d.buildPlan ?? null;
+}
+
+function openAdoptDialog(planType: PlanType) {
+  adoptPlanType.value = planType;
+}
+
+function onAdoptConfirm(plan: ActionPlan) {
+  if (adoptPlanType.value) {
+    emit('adoptPlan', props.card.stock.code, adoptPlanType.value, plan);
+  }
+  adoptPlanType.value = null;
 }
 
 const editingPosition = ref(false);
@@ -466,7 +511,7 @@ const customKeyLevelCount = computed(
           <template v-if="card.diagnosis.bandAction || card.diagnosis.shortAction">
             <p v-if="card.diagnosis.bandAction" class="line-clamp line-clamp-loose action-text">
               {{ t('card.bandActionPrefix') }}{{ card.diagnosis.bandAction }}
-              <span v-if="!widgetMode && card.diagnosis.bandPlan" class="plan-actions">
+              <span v-if="!widgetMode" class="plan-actions">
                 <template v-if="isPlanPending('band')">
                   <button
                     type="button"
@@ -479,7 +524,7 @@ const customKeyLevelCount = computed(
                   <button
                     type="button"
                     class="btn-link btn-link-sm"
-                    @click="emit('adoptPlan', card.stock.code, 'band')"
+                    @click="openAdoptDialog('band')"
                   >{{ t('card.adopt') }}</button>
                   <button
                     type="button"
@@ -491,7 +536,7 @@ const customKeyLevelCount = computed(
             </p>
             <p v-if="card.diagnosis.shortAction" class="line-clamp line-clamp-loose action-text">
               {{ t('card.shortActionPrefix') }}{{ card.diagnosis.shortAction }}
-              <span v-if="!widgetMode && card.diagnosis.shortPlan" class="plan-actions">
+              <span v-if="!widgetMode" class="plan-actions">
                 <template v-if="isPlanPending('short')">
                   <button
                     type="button"
@@ -504,7 +549,7 @@ const customKeyLevelCount = computed(
                   <button
                     type="button"
                     class="btn-link btn-link-sm"
-                    @click="emit('adoptPlan', card.stock.code, 'short')"
+                    @click="openAdoptDialog('short')"
                   >{{ t('card.adopt') }}</button>
                   <button
                     type="button"
@@ -517,7 +562,7 @@ const customKeyLevelCount = computed(
           </template>
           <p v-else-if="card.diagnosis.buildPositionAdvice" class="line-clamp line-clamp-loose action-text">
             {{ t('card.buildPositionAdvicePrefix') }}{{ card.diagnosis.buildPositionAdvice }}
-            <span v-if="!widgetMode && card.diagnosis.buildPlan" class="plan-actions">
+            <span v-if="!widgetMode" class="plan-actions">
               <template v-if="isPlanPending('build')">
                 <button
                   type="button"
@@ -530,7 +575,7 @@ const customKeyLevelCount = computed(
                 <button
                   type="button"
                   class="btn-link btn-link-sm"
-                  @click="emit('adoptPlan', card.stock.code, 'build')"
+                  @click="openAdoptDialog('build')"
                 >{{ t('card.adopt') }}</button>
                 <button
                   type="button"
@@ -565,6 +610,20 @@ const customKeyLevelCount = computed(
         </button>
       </div>
     </div>
+
+    <Teleport to="body">
+      <AdoptPlanDialog
+        v-if="adoptPlanType"
+        :stock="card.stock"
+        :plan-type="adoptPlanType"
+        :advice="adviceFor(adoptPlanType)"
+        :plan="planFor(adoptPlanType)"
+        :ref-price="card.snapshot?.price ?? null"
+        :available-cash="availableCash ?? null"
+        @confirm="onAdoptConfirm"
+        @cancel="adoptPlanType = null"
+      />
+    </Teleport>
   </article>
 </template>
 
