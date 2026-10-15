@@ -112,4 +112,45 @@ describe('shouldKeepCachedLongAdvice (v2.14.0 cross-day freeze)', () => {
       }),
     ).toBe(false);
   });
+
+  it('v2.15.1: 1% 级别的漂移不再破冻（长期阈值 2%）', () => {
+    expect(
+      shouldKeepCachedLongAdvice({
+        ...longBase,
+        newSupport: 6.1804, // +0.987%
+        newResistance: 6.9185, // +1.0%
+      }),
+    ).toBe(true);
+  });
+
+  it('v2.15.1: 超过 2% 的重新定位才算实质变化', () => {
+    expect(
+      shouldKeepCachedLongAdvice({
+        ...longBase,
+        newSupport: 6.28, // +2.6%
+      }),
+    ).toBe(false);
+    expect(
+      shouldKeepCachedLongAdvice({
+        ...longBase,
+        newResistance: 6.7, // −2.2%
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('levelMateriallyChanged 自定义阈值（v2.15.1）', () => {
+  it('同一漂移在不同阈值下结论不同', () => {
+    // 1% 漂移：波段阈值（0.5%）判为变化；长期阈值（2%）判为稳定
+    expect(levelMateriallyChanged(1.44, 1.4544)).toBe(true);
+    expect(levelMateriallyChanged(1.44, 1.4544, 0.02)).toBe(false);
+    // 2.5% 漂移：长期阈值也判为变化
+    expect(levelMateriallyChanged(1.44, 1.476, 0.02)).toBe(true);
+  });
+
+  it('缺值在任何阈值下都判为变化', () => {
+    expect(levelMateriallyChanged(undefined, 1.44, 0.02)).toBe(true);
+    expect(levelMateriallyChanged(1.44, undefined, 0.02)).toBe(true);
+    expect(levelMateriallyChanged(0, 1.44, 0.02)).toBe(true);
+  });
 });

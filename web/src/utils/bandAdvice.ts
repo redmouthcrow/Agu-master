@@ -10,16 +10,23 @@
 
 /** Relative level drift above which a replacement band advice is accepted. */
 export const BAND_LEVEL_DRIFT_THRESHOLD = 0.005;
+/**
+ * v2.15.1: 长期档的阈值放宽——AI 每轮把支撑/压力重新锚定到现价附近，
+ * 价格在冻结区间内小幅走动就会让新 levels 相对原点漂移 0.5%+；
+ * 对长期策略只有"结构被重新定位"（≈2%）才算实质变化。
+ */
+export const LONG_LEVEL_DRIFT_THRESHOLD = 0.02;
 
 /** Missing or zero denominators count as changed (fail open to fresh advice). */
 export function levelMateriallyChanged(
   oldValue: number | undefined,
   newValue: number | undefined,
+  threshold: number = BAND_LEVEL_DRIFT_THRESHOLD,
 ): boolean {
   if (oldValue == null || newValue == null || oldValue === 0) {
     return true;
   }
-  return Math.abs(newValue - oldValue) / Math.abs(oldValue) > BAND_LEVEL_DRIFT_THRESHOLD;
+  return Math.abs(newValue - oldValue) / Math.abs(oldValue) > threshold;
 }
 
 export interface BandFreezeInput {
@@ -63,12 +70,14 @@ export interface LongFreezeInput {
 }
 
 /**
- * Cross-day freeze for long-horizon advice (v2.14.0).
+ * Cross-day freeze for long-horizon advice (v2.14.0, semantics fixed in v2.15.1).
  *
- * 长期策略的目标是"看涨就不管今天的涨跌继续持有"——建议必须跨日稳定，
- * 否则日内噪声每天都会改口。缓存建议只在两种情况下让位给新建议：
- *  1. 锚定的 support/resistance 发生实质变化（>0.5%，与波段冻结同阈值）；
- *  2. 当前价已真实穿越锚定区间（price < support 或 price > resistance）
+ * 长期策略的目标是"看涨就不管今天的涨跌继续持有"——建议必须跨日稳定。
+ * 缓存建议只在两种情况下让位给新建议：
+ *  1. 锚定的 support/resistance 相对**冻结原点**发生实质变化（>2%；
+ *     调用方必须在冻结时把 supportLevel/resistanceLevel 一并冻结，
+ *     否则对比的是"上一轮 vs 这一轮"，几轮累积漂移就会误破冻）；
+ *  2. 当前价已真实穿越冻结的锚定区间（price < support 或 price > resistance）
  *     ——即建议中的离场/重估条件可能已经触发。
  * 与波段冻结不同，不要求同日（这是跨日稳定特性本身）。
  */
@@ -76,10 +85,16 @@ export function shouldKeepCachedLongAdvice(input: LongFreezeInput): boolean {
   if (!input.cachedLong) {
     return false;
   }
-  if (levelMateriallyChanged(input.cachedSupport, input.newSupport)) {
+  if (levelMateriallyChanged(input.cachedSupport, input.newSupport, LONG_LEVEL_DRIFT_THRESHOLD)) {
     return false;
   }
-  if (levelMateriallyChanged(input.cachedResistance, input.newResistance)) {
+  if (
+    levelMateriallyChanged(
+      input.cachedResistance,
+      input.newResistance,
+      LONG_LEVEL_DRIFT_THRESHOLD,
+    )
+  ) {
     return false;
   }
   const price = input.price;

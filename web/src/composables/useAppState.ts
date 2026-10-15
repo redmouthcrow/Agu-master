@@ -815,7 +815,10 @@ async function refreshCardQuoteAndDiagnosis(
       let keepCachedBand = false;
       if (horizon === 'long') {
         // v2.14.0 cross-day long freeze: 长期策略跨日稳定——"看涨就不管今天的
-        // 涨跌继续持有"。仅当锚定关键位实质变化、或价格真实穿越锚定区间时更新。
+        // 涨跌继续持有"。
+        // v2.15.1: 冻结时必须把锚定关键位一并冻结——否则每轮的对比基准会随
+        // AI 重新锚定的新 levels 漂移（几轮累积后误破冻），且冻结文本引用的
+        // 价位与卡片显示/写入 keyLevels 的价位脱节。冻结后对比基准=冻结原点。
         const keepCachedLong = shouldKeepCachedLongAdvice({
           cachedLong: cachedDiag?.longAction,
           cachedSupport: cachedDiag?.supportLevel,
@@ -829,6 +832,8 @@ async function refreshCardQuoteAndDiagnosis(
               ...result.data,
               longAction: cachedDiag!.longAction,
               longPlan: cachedDiag!.longPlan ?? null,
+              supportLevel: cachedDiag!.supportLevel ?? result.data.supportLevel,
+              resistanceLevel: cachedDiag!.resistanceLevel ?? result.data.resistanceLevel,
             }
           : result.data;
       } else {
@@ -836,6 +841,7 @@ async function refreshCardQuoteAndDiagnosis(
         // keep today's first version while its anchored key levels are stable.
         // v2.14.0: the cached bandPlan travels with the frozen text so the
         // adopted order stays consistent with the frozen advice.
+        // v2.15.1: 锚定关键位同样随冻结文本一并延续（文本与显示/告警一致）。
         keepCachedBand = shouldKeepCachedBandAdvice({
           cachedBand: cachedDiag?.bandAction,
           cachedBandDate: cached?.bandDate,
@@ -850,6 +856,8 @@ async function refreshCardQuoteAndDiagnosis(
               ...result.data,
               bandAction: cachedDiag!.bandAction,
               bandPlan: cachedDiag!.bandPlan ?? null,
+              supportLevel: cachedDiag!.supportLevel ?? result.data.supportLevel,
+              resistanceLevel: cachedDiag!.resistanceLevel ?? result.data.resistanceLevel,
             }
           : result.data;
       }
@@ -862,10 +870,12 @@ async function refreshCardQuoteAndDiagnosis(
         updatedAt,
         bandDate: diagnosis.bandAction ? (keepCachedBand ? cached?.bandDate : today) : undefined,
       });
+      // v2.15.1: 用「已解析」的关键位（冻结时即冻结原点值），与建议文本、
+      // 卡片显示保持一致；冻结期间告警锚定的正是建议所引用的价位。
       applyKeyLevelsFromDiagnosis(
         card.stock,
-        result.data.supportLevel,
-        result.data.resistanceLevel,
+        diagnosis.supportLevel,
+        diagnosis.resistanceLevel,
         updatedAt,
       );
       return 'ok';
