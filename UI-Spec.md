@@ -2,7 +2,7 @@
 
 > 本文件为 [Product-Spec.md](./Product-Spec.md) 的 UI 附录，开发实现以此为准。
 
-**文档版本**：2.15.2（对齐 Product-Spec 2.15.2）
+**文档版本**：2.15.3（对齐 Product-Spec 2.15.3）
 
 ---
 

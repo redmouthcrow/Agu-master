@@ -4,6 +4,18 @@
 
 ---
 
+## 2.15.3 - 2026-10-15
+
+### 变更类型：修复（修订版本）
+
+### 修复
+- **2.15.2 持久化修复不完整：数据根本没送出渲染层**。现场验证（挂单后 kv 目录仍为空，而诊断/同步文件正常写入）发现第二层缺陷：`persistOrdersAndTrades` 直接把 **Vue 响应式数组**（`pendingOrders.value` 等 Proxy 对象）传给 `window.aguDesktop.storageSet`，而 contextBridge/IPC 以**结构化克隆**序列化参数——**Proxy 无法克隆**，抛 "An object could not be cloned."，又被 `void ...` 静默吞掉。用最小 Electron 实验证实（Proxy 抛错 / 纯对象正常）。修复：
+  - `persistOrdersAndTrades` 在 IPC 前 JSON 剥离响应式代理（与代码库其余 IPC 调用点一致的既有模式，`liveSync.ts` 中早已注释此坑）
+  - `desktopStorageSet` 助手增加防御性剥离（未来调用方免疫）
+  - 至此订单/流水/快照两条链路（渲染层序列化 + 主进程落盘）均打通
+
+---
+
 ## 2.15.2 - 2026-10-15
 
 ### 变更类型：修复（修订版本）
@@ -328,5 +340,5 @@
 
 ---
 
-**文档版本**：2.15.2
+**文档版本**：2.15.3
 **最后更新**：2026-10-14

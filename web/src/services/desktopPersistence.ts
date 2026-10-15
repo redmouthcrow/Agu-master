@@ -62,7 +62,8 @@ export async function desktopStorageSet(key: string, value: unknown): Promise<bo
   if (!isDesktopRuntime() || !window.aguDesktop?.storageSet) {
     return setItem(key, value);
   }
-  return window.aguDesktop.storageSet(key, value);
+  // v2.15.3: 防御性剥离响应式代理——contextBridge 结构化克隆无法序列化 Proxy。
+  return window.aguDesktop.storageSet(key, JSON.parse(JSON.stringify(value)));
 }
 
 export async function desktopCleanupCalendars(keepYears: number[]): Promise<void> {

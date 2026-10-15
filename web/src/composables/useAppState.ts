@@ -116,9 +116,14 @@ function loadOrdersAndTradesSync(): void {
 
 function persistOrdersAndTrades(): void {
   if (isDesktopRuntime()) {
-    void window.aguDesktop?.storageSet(PENDING_ORDERS_KEY, pendingOrders.value);
-    void window.aguDesktop?.storageSet(TRADES_KEY, trades.value);
-    void window.aguDesktop?.storageSet(EQUITY_SNAPSHOTS_KEY, equitySnapshots.value);
+    // v2.15.3: IPC/contextBridge 以结构化克隆序列化参数——Vue 响应式 Proxy
+    // 无法克隆（抛 "An object could not be cloned." 并被 void 静默吞掉），
+    // 必须先剥离为纯对象。此前订单/流水/快照因此根本没有送到主进程
+    // （与 v2.15.2 修复的主进程存储层构成两个并存的坑，两处都修才完整落盘）。
+    const strip = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+    void window.aguDesktop?.storageSet(PENDING_ORDERS_KEY, strip(pendingOrders.value));
+    void window.aguDesktop?.storageSet(TRADES_KEY, strip(trades.value));
+    void window.aguDesktop?.storageSet(EQUITY_SNAPSHOTS_KEY, strip(equitySnapshots.value));
     return;
   }
   setItem(PENDING_ORDERS_KEY, pendingOrders.value);
