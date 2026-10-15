@@ -33,6 +33,7 @@ import {
 import { fetchQuotesWithFallback } from '../services/quoteJsonp';
 import { fetchSina } from '../services/quoteJsonp';
 import { LlmAuthError, runDiagnosis, sleep } from '../services/llmDiagnosis';
+import { ensureExternalContext } from '../services/externalMarkets';
 import {
   getCalendarFailed,
   isTradingDay,
@@ -1517,7 +1518,9 @@ export function useAppState() {
       const session = getSessionLabel(trading);
       const aligned = getAlignedTimeLabel(trading, new Date(), config.value.refreshFrequency);
       const aiState = { stopAi: false };
+      const externalReady = ensureExternalContext();
       const quotes = await fetchQuotesWithFallback([code]);
+      await externalReady;
       const outcome = await refreshCardWithParseRetry(
         card,
         session,
@@ -1552,7 +1555,10 @@ export function useAppState() {
 
     try {
       const codes = cards.value.filter((c) => !c.stock.trackingOnly).map((c) => c.stock.code);
+      // v2.15.0: 盘外参照与行情并行拉取，供本轮 LLM 注入。
+      const externalReady = ensureExternalContext();
       const quotes = await fetchQuotesWithFallback(codes);
+      await externalReady;
 
       const aiState = { stopAi: false };
       let reusedCount = 0;

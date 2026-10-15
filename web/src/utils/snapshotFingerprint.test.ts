@@ -10,6 +10,7 @@ const snap: QuoteSnapshot = {
   changePct: 1.2,
   high: 6.6,
   low: 6.4,
+  open: 6.45,
   volume: 100_000,
   amount: 650_000,
   prevClose: 6.42,

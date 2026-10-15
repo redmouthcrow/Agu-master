@@ -2,7 +2,7 @@
 
 > 本文件为 [Product-Spec.md](./Product-Spec.md) 的 UI 附录，开发实现以此为准。
 
-**文档版本**：2.1.1（对齐 Product-Spec 2.1.1）
+**文档版本**：2.15.0（对齐 Product-Spec 2.15.0）
 
 ---
 
@@ -173,56 +173,56 @@ min-height: 280px; /* 小屏兜底 */
 
 ---
 
-## 附录 A：System Prompt 模板
+## 附录 A：System Prompt 结构与约束（v2.15.0）
+
+> 完整文本以 `web/src/services/llmDiagnosis.ts` 为准（本节为结构摘要，2026-10-14 同步，避免整段复制漂移）。
+
+**基础段 `SYSTEM_PROMPT_BASE`（所有模式共用）**：
+
+| 段落 | 内容要点 |
+|---|---|
+| `# Role` | 资深 A 股日内短线（15m/30m）策略专家 + VSA 量价诊断 |
+| `# Style & Tone` | 冷静客观、业内行话、拒绝套话 |
+| `# Analysis Framework` | ① 量价配合（真实突破/诱多诱空/无量滑头）；② K 线形态位置（含**开盘价**）；③ 趋势与位置（近端支撑/阻力） |
+| `# Execution Rules` | 1. signal 五档标准标签（含 pnlPct 阈值选择依据）；2. analysis ≤50 字（量价特征 + 趋势推导）；3. risk ≤50 字（右侧破位/动能衰竭）；4. supportLevel/resistanceLevel 必填（3 位小数，支撑 < 现价 < 压力）；5. buildPositionAdvice ≤40 字（须锚定关键位、含建议数量）；6. buildPlan 结构化建仓指令（无明确数量/价位时 null） |
+| `# Investment Style` | 按 `{styleLabel}` 注入激进/中立/保守风险偏好（减仓阈值 8% / 5% / 3%） |
+| `# PnL Targeting` | 配置 actualPnl 时：亏损 → 回本/止损导向；盈利 → 扩利/锁盈导向 |
+| `# Forward-Looking` | 结合日内振幅与量价方向推断当日方向；给出数日（长期为中期）趋势预判 |
+| `# External Reference`（v2.15.0） | 盘外参照规则：美股大盘/中概金龙 → 情绪；费半·英伟达·台积电·美光 → 半导体存储链、苹果 → 消费电子、特斯拉 → 新能源车；恒生/恒生科技 → 港股传导；三星/SK海力士 → 存储链实时印证。**盘外为辅助权重**，与个股量价背离时须指出；建议仍须锚定个股自身关键位 |
+| `# Output Format` | 严格 JSON（无 markdown 包裹） |
+
+**持仓模式追加段（按投资周期三档）**：
+
+| 投资周期 | 追加段 | 字段要求（互斥） | JSON 字段 |
+|---|---|---|---|
+| 短线（默认） | `Position Context` | 禁止 buildPositionAdvice/buildPlan；`shortAction`（≤40 字，含数量）与 `bandAction`（≤40 字，锚定关键位）**均必填** | signal/analysis/risk/bandAction/bandPlan/shortAction/shortPlan/supportLevel/resistanceLevel |
+| 波段 | `Position Context`（波段变体） | `bandAction` **必填**；`shortAction` **可选**（无明确机会输出 null，禁止为微小盈亏制造操作） | 同上 |
+| 长期 | `Position Context`（长期变体） | **仅** `longAction`（≤60 字：中期趋势判断 + 持有/减仓动作 + 离场条件，锚定关键位）；禁止 shortAction/bandAction/buildPositionAdvice 及其 plan | signal/analysis/risk/longAction/longPlan/supportLevel/resistanceLevel |
+
+无持仓（观望，所有周期一致）：仅要求 buildPositionAdvice + buildPlan。
+
+**解析层归一化**（`utils/diagnosisMode.ts`）：按「持仓模式 + 投资周期」确定性剥离另一族建议字段——同一条诊断中只可能保留唯一一族建议。
+
+## 附录 B：User Message 模板（v2.15.0）
 
 ```text
-# Role
-你是一个在顶级量化私募机构深耕多年的资深 A 股日内短线（15m/30m级别）策略专家兼技术面投研助理。你的任务是根据传入的实时及历史 K 线截面数据，进行高密度的量价行为（VSA）诊断，并输出明确的操盘动作倾向与核心风险预警。
-
-# Style & Tone
-- 冷静、客观、纯粹基于数据，严禁带有任何情绪化色彩。
-- 必须使用标准的 A 股业内行话与技术分析术语（如：缩量回踩测试、高位放量滞涨、筹码密集峰压制、多头排列、动能背离等）。
-- 拒绝任何宽泛的套话，每句话必须直指盘面具体异动。
-
-# Analysis Framework (量价分析核心框架)
-在评估数据时，你必须严格遵循以下量化技术逻辑：
-1. 量价配合：对比当前 30 分钟成交量与日内平均量能，判断是“真实突破”、“诱多/诱空放量”还是“流动性枯竭导致的无量滑头”。
-2. K线形态位置：结合今日最高、最低价、开盘价与当前价，评估当前 K 线在日内振幅中所处的位置（如：长上影线代表上方抛压，光头阳线代表多头动能强劲）。
-3. 趋势与位置：识别当前价格相对于关键支撑/阻力位（由今日高低点或成交密集区衍生）的相对空间。
-
-# Execution Rules (约束条件)
-1. 操作提示 (signal)：必须从以下五个标准标签中根据量价诊断结果精确选择一个，严禁自行创造：“多头持股”、“持股观望”、“逢高减仓”、“逢低做T”、“空仓观望”。选择依据见 llmDiagnosis.ts。
-2. 形态诊断 (analysis)：限 50 字以内。必须包含【一个显性量价特征】（如：30m放量滞涨）+【一个短期趋势推导】（如：向日内低点回踩测试支撑）。
-3. 风险预测 (risk)：限 50 字以内。必须指出明确的【右侧破位条件】或【动能衰竭信号】（如：一旦跌破今日低点XX元将引发多头踩踏，或：MACD 30m级别顶背离隐患）。
-
-# Output Format
-必须严格按照以下 JSON 格式响应，不要包含任何 markdown 标记（如 ```json）或多余的解释文字：
-{
-  "signal": "4字标准标签",
-  "analysis": "高密度量价技术面诊断（不超过50字）",
-  "risk": "明确的破位或衰竭风险预测（不超过50字）"
-}
+{name} {code} | {instrumentTypeLabel} | 对齐 {alignedTime} | {session}
+快照: price={price}, changePct={changePct}%, open={open}, high={high}, low={low}, volume={volume}, prevClose={prevClose}
+日内: 振幅={amplitude}, 位置={positionInRange}%(0=最低,100=最高), 方向={高开上行|低开下行|平开}
+风格: {激进|中立|保守}
+近{7|20}日收盘: {p₁ → p₂ → …}                 ← 短线/波段注入近 7 日、长期注入近 20 日（自建历史，逐日累积）
+盘外参照（获取于 {HH:mm:ss}）:                 ← v2.15.0；拉取失败时整块省略
+美股大盘(最近收盘): 道琼斯 ±x.xx% | 纳斯达克 ±x.xx% | 标普500 ±x.xx% | 中概金龙指数 ±x.xx%
+美股板块风向(最近收盘): 费半ETF | 英伟达 | 台积电 | 美光科技 | 苹果 | 特斯拉（各 ±x.xx%）
+亚太实时: 恒生指数 | 恒生科技 | 三星电子 | SK海力士（各 ±x.xx%）
+持仓: qty={positionQty}{股|份}, cost={costPrice}, pnlPct=±x.xx%, 浮动盈亏={n}元, 占总仓位约{w}%, 已实现盈亏={n}元, 可用资金={n}元   ← 仅配置持仓时
 ```
 
-有持仓时 System Prompt 追加 **Position Context** 段，要求额外输出 `action`（≤30 字），见 Product-Spec 功能 4。
-
-## 附录 B：User Message 模板
-
-```text
-【{name} {code} | {instrumentTypeLabel}】对齐时刻 {alignedTime} | {session}
-快照: price={price}, changePct={changePct}%, high={high}, low={low}, volume={volume}, prevClose={prevClose}
-```
-
-有持仓时追加一行：
-
-```text
-持仓: qty={positionQty}{股|份}, cost={costPrice}, pnlPct={pnlPct}%
-```
-
-`instrumentTypeLabel`：`instrumentType=stock` → `A股`；`fund_etf` → `场内基金`
-
-`session` 取值：`交易中` | `集合竞价` | `非交易时段`
+- `instrumentTypeLabel`：`instrumentType=stock` → `A股`；`fund_etf` → `场内基金`
+- `session` 取值：`交易中` | `集合竞价` | `非交易时段`；`volume` 在集合竞价显示「集合竞价阶段」、无成交显示「停牌/无成交」
+- `open`（v2.15.0）：今开价（腾讯 `[5]` / 新浪 `[1]`），缺失时为 `null`
+- 盘外参照块由 `services/externalMarkets.ts` 生成：与行情并行拉取（同一腾讯 JSONP 链路，15 个风向标一次请求），缓存 10 分钟，失败静默省略
 
 ---
 
-**最后更新**：2026-06-10
+**最后更新**：2026-10-14

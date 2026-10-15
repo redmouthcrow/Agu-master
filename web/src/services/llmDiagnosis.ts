@@ -11,6 +11,7 @@ import type {
 import { calcPnlPct, hasPosition, roundCostPrice } from '../utils/position';
 import { normalizeDiagnosisByPosition } from '../utils/diagnosisMode';
 import { formatVolumeForPrompt } from './quoteJsonp';
+import { getExternalContextText } from './externalMarkets';
 import { formatHistoryText } from '../utils/priceHistory';
 
 const SYSTEM_PROMPT_BASE = `# Role
@@ -54,6 +55,16 @@ const SYSTEM_PROMPT_BASE = `# Role
 - 结合 User Message 中的近段收盘价走势（短线/波段为近7日，长期为近20日），判断趋势方向（上行/下行/横盘），并在 analysis 中体现
 - bandAction / buildPositionAdvice 中给出基于关键位与近期趋势的未来 3-5 个交易日波段预判
 - risk 中指出判断错误的关键破位条件
+
+# External Reference (盘外参照)
+当 User Message 包含「盘外参照」时，必须结合其判断情绪联动，并纳入 analysis / risk / 建议方向：
+- 隔夜美股大盘（道琼斯/纳斯达克/标普500）与中概金龙指数 → 当日 A 股整体风险偏好与外盘情绪；
+- 美股板块风向（费半ETF/英伟达/台积电/美光 → 半导体·存储·算力链；苹果 → 消费电子链；特斯拉 → 新能源车链）→ 对应 A 股板块的开盘情绪与联动方向；
+- 亚太实时（恒生指数/恒生科技 → 港股情绪对 A 股的风险偏好传导；三星电子/SK海力士 → 存储与半导体链的实时印证）。
+规则：
+1. 盘外因素作为**辅助权重**——仅当盘外信号与个股自身量价结构一致时提升判断置信度；两者明显背离时（如美股半导体大跌而个股缩量抗跌）必须在 analysis 或 risk 中明确指出该背离。
+2. 最终建议（bandAction / shortAction / longAction）**必须锚定该证券自身的 supportLevel / resistanceLevel**，不得因盘外因素脱离关键位给出价位。
+3. 指数类数据（美股大盘/金龙指数）主要影响情绪描述与风险提示，不直接派生个股价位建议；个股对照（英伟达/台积电/三星等）与对应 A 股板块的联动可直接用于倾向判断。
 
 # Output Format
 必须严格按照以下 JSON 格式响应，不要包含任何 markdown 标记（如 \`\`\`json）或多余的解释文字：
@@ -181,8 +192,9 @@ function buildUserMessage(
         : 'null';
   }
 
+  const open = snapshot.open;
   let msg = `${snapshot.name} ${snapshot.code} | ${typeLabel(snapshot.instrumentType)} | 对齐 ${alignedTime} | ${session}
-快照: price=${snapshot.price}, changePct=${change}%, high=${high}, low=${low}, volume=${volume}, prevClose=${prevClose}
+快照: price=${snapshot.price}, changePct=${change}%, open=${open ?? 'null'}, high=${high}, low=${low}, volume=${volume}, prevClose=${prevClose}
 日内: 振幅=${amplitude}, 位置=${positionInRange}%(0=最低,100=最高), 方向=${direction}
 风格: ${STYLE_LABELS[investmentStyle] ?? '中立'}`;
 
@@ -192,6 +204,12 @@ function buildUserMessage(
   const histText = formatHistoryText(snapshot.code, histDays);
   if (histText) {
     msg += `\n近${histDays}日收盘: ${histText}`;
+  }
+
+  // v2.15.0: 盘外参照（隔夜美股/美股板块风向/亚太实时）——仅当拉取到数据时注入。
+  const externalText = getExternalContextText();
+  if (externalText) {
+    msg += `\n${externalText}`;
   }
 
   if (hasPosition(watchlistItem)) {

@@ -224,6 +224,8 @@ export interface QuoteSnapshot {
   changePct: number | null;
   high: number | null;
   low: number | null;
+  /** v2.15.0: 今开（注入 Prompt，供日内形态判断）。 */
+  open: number | null;
   volume: number | null;
   amount: number | null;
   prevClose: number | null;

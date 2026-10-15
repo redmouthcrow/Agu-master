@@ -2,7 +2,8 @@ import type { QuoteSnapshot } from '../types';
 import { inferInstrumentType } from '../utils/stockCode';
 import { formatTimeHms, getBeijingTime } from '../utils/time';
 
-function loadScript(src: string): Promise<void> {
+/** Exported for the external-markets fetcher (same JSONP script mechanism). */
+export function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = src;
@@ -23,9 +24,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function parseTencent(code: string): QuoteSnapshot | null {
-  const key = `v_${code}`;
-  const raw = (window as unknown as Record<string, string | undefined>)[key];
+/**
+ * v2.15.0: pure field parser (exported for tests). Tencent layout:
+ * [1]名称 [3]现价 [4]昨收 [5]今开 [6]量 [33]高 [34]低 [37]额。
+ */
+export function parseTencentFields(code: string, raw: string | undefined): QuoteSnapshot | null {
   if (!raw) {
     return null;
   }
@@ -57,13 +60,18 @@ function parseTencent(code: string): QuoteSnapshot | null {
     volume,
     amount,
     prevClose,
+    open: num(parts[5]),
     quoteTime: `${getBeijingTime().dateStr} ${formatTimeHms()}`,
   };
 }
 
-function parseSina(code: string): QuoteSnapshot | null {
-  const key = `hq_str_${code.toLowerCase()}`;
-  const raw = (window as unknown as Record<string, string | undefined>)[key];
+function parseTencent(code: string): QuoteSnapshot | null {
+  const raw = (window as unknown as Record<string, string | undefined>)[`v_${code}`];
+  return parseTencentFields(code, raw);
+}
+
+/** v2.15.0: pure field parser (exported for tests). Sina layout: [0]名称 [1]今开 [2]昨收 [3]现价 [4]高 [5]低。 */
+export function parseSinaFields(code: string, raw: string | undefined): QuoteSnapshot | null {
   if (!raw || raw.includes('FAILED')) {
     return null;
   }
@@ -91,8 +99,14 @@ function parseSina(code: string): QuoteSnapshot | null {
     volume: num(parts[8]),
     amount: num(parts[9]),
     prevClose,
+    open: num(parts[1]),
     quoteTime: `${getBeijingTime().dateStr} ${formatTimeHms()}`,
   };
+}
+
+function parseSina(code: string): QuoteSnapshot | null {
+  const raw = (window as unknown as Record<string, string | undefined>)[`hq_str_${code.toLowerCase()}`];
+  return parseSinaFields(code, raw);
 }
 
 function num(v: string | undefined): number | null {
