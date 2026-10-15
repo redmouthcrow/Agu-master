@@ -8,6 +8,8 @@ const DIAGNOSIS_FILE = 'diagnosis-cache.json';
 const LIVE_SYNC_FILE = 'live-sync.json';
 const WIDGET_BOUNDS_FILE = 'widget-window.json';
 const CALENDAR_DIR = 'calendars';
+/** v2.15.2: 任意键的 KV 落盘目录（模拟账户数据：委托单/流水/净值快照）。 */
+const KV_DIR = 'kv';
 
 const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1';
 const DEFAULT_MODEL = 'deepseek-chat';
@@ -75,13 +77,19 @@ function readJsonFile<T>(filePath: string): T | null {
 
 function writeJsonFile(filePath: string, value: unknown): boolean {
   try {
-    ensureStoreDir();
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf8');
     return true;
   } catch (err) {
     console.error('[AguMaster] Failed to write user data:', filePath, err);
     return false;
   }
+}
+
+/** v2.15.2: 任意键的落盘路径（键名做文件安全化）。 */
+function kvFilePath(key: string): string {
+  const safe = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(storeRoot(), KV_DIR, `${safe}.json`);
 }
 
 function encryptApiKey(apiKey: string): string | undefined {
@@ -220,7 +228,10 @@ export function storageGet(key: string): unknown | null {
       path.join(storeRoot(), CALENDAR_DIR, `calendar-${year}.json`),
     );
   }
-  return null;
+  // v2.15.2: 读取任意键的 KV 文件。此前对非日历键直接返回 null，
+  // 模拟账户数据（委托单/流水/净值快照）持久化了也读不回来。
+  const filePath = kvFilePath(key);
+  return fs.existsSync(filePath) ? readJsonFile<unknown>(filePath) : null;
 }
 
 export function storageSet(key: string, value: unknown): boolean {
@@ -231,15 +242,15 @@ export function storageSet(key: string, value: unknown): boolean {
       value,
     );
   }
-  return false;
+  // v2.15.2: 任意键落盘 —— 此前对非日历键静默 return false，导致桌面版
+  // 待触发订单 / 成交流水 / 净值快照只存在于内存，退出或重装（重启）即丢失。
+  return writeJsonFile(kvFilePath(key), value);
 }
 
 export function storageRemove(key: string): void {
-  if (!key.startsWith('trading_calendar_')) {
-    return;
-  }
-  const year = key.replace('trading_calendar_', '');
-  const filePath = path.join(storeRoot(), CALENDAR_DIR, `calendar-${year}.json`);
+  const filePath = key.startsWith('trading_calendar_')
+    ? path.join(storeRoot(), CALENDAR_DIR, `calendar-${key.replace('trading_calendar_', '')}.json`)
+    : kvFilePath(key);
   try {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);

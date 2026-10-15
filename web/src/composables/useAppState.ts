@@ -657,6 +657,10 @@ function canPersistDesktopConfig(): boolean {
 }
 
 async function flushDesktopPersistence(): Promise<void> {
+  // v2.15.2: 模拟账户数据（委托单/流水/净值快照）与配置文件模式无关，
+  // 退出前无条件落盘——作为最后一道保存点（此前非日历键被主进程静默丢弃，
+  // 桌面版这些数据从未持久化）。
+  persistOrdersAndTrades();
   if (!canPersistDesktopConfig()) {
     return;
   }
