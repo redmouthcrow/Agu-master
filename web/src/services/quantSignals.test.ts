@@ -126,7 +126,7 @@ describe('buildQuantDirective', () => {
   });
 });
 
-describe('resolveQuantAdvice（量化优先硬约束）', () => {
+describe('resolveQuantAdvice（量化优先硬约束，v2.16.1 收紧）', () => {
   const basePlan = {
     side: 'sell' as const,
     qty: 14000,
@@ -134,22 +134,23 @@ describe('resolveQuantAdvice（量化优先硬约束）', () => {
     condition: 'gte' as const,
   };
 
-  it('AI 方向与量化一致 → 原样保留', () => {
+  it('方向一致但力度不足（减仓1/3）→ 行动句仍由量化指令替换', () => {
     const r = resolveQuantAdvice('反弹至1.400附近减仓1/3，跌破1.361清仓', basePlan, signal, 0.6);
-    expect(r.overridden).toBe(false);
-    expect(r.longAction).toContain('减仓');
-    expect(r.longPlan).toEqual(basePlan);
+    expect(r.overridden).toBe(true);
+    expect(r.longAction).toContain('【量化优先】');
+    expect(r.longAction).toContain('应清仓离场');
+    expect(r.longAction).not.toContain('1/3');
+    expect(r.longPlan).toEqual(basePlan); // 计划方向一致，保留供预填
   });
 
   it('AI 反向建议（继续持有）→ 替换为码生成指令', () => {
     const r = resolveQuantAdvice('中期趋势未破坏，继续持有，跌破1.361再评估', basePlan, signal, 0.6);
     expect(r.overridden).toBe(true);
-    expect(r.longAction).toContain('【量化优先】');
     expect(r.longAction).toContain('应清仓离场');
     expect(r.longAction).not.toContain('继续持有');
   });
 
-  it('文本一致但计划方向相反 → 丢弃计划（文本保留）', () => {
+  it('计划方向相反 → 丢弃计划（行动句仍为量化指令）', () => {
     const buyPlan = { side: 'buy' as const, qty: 1000, triggerPrice: 1.36, condition: 'lte' as const };
     const r = resolveQuantAdvice('跌破1.361清仓', buyPlan, signal, 0.6);
     expect(r.overridden).toBe(true);
@@ -157,7 +158,12 @@ describe('resolveQuantAdvice（量化优先硬约束）', () => {
     expect(r.longAction).toContain('【量化优先】');
   });
 
-  it('维持档（目标≈当前）→ 不做方向约束', () => {
+  it('指令包含参考关键位', () => {
+    const r = resolveQuantAdvice('减仓', null, signal, 0.6, { support: 1.35, resistance: 1.395 });
+    expect(r.longAction).toContain('参考关键位 支撑 1.350/压力 1.395');
+  });
+
+  it('维持档（目标≈当前）→ 保留 AI 文本、不约束', () => {
     const holdSignal: QuantSignal = { ...signal, target_weight: 0.6 };
     const r = resolveQuantAdvice('趋势未破坏，继续持有', null, holdSignal, 0.6);
     expect(r.overridden).toBe(false);

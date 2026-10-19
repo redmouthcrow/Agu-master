@@ -58,6 +58,11 @@ export type QuantDirection = 'buy' | 'sell' | 'hold';
 export const QUANT_STALE_DAYS = 7;
 /** 目标仓位与当前占比相差在 ±2 个百分点内视为「维持持有」。 */
 export const QUANT_HOLD_TOLERANCE = 0.02;
+/**
+ * v2.16.1: 约束逻辑版本——参与量化签名。逻辑变更（强硬度调整）后，
+ * 已缓存的诊断因签名不匹配而强制重新生成（否则行情未变时会沿用旧文本）。
+ */
+export const QUANT_LOGIC_VERSION = 'v2';
 
 const SELL_WORDS = ['减仓', '清仓', '减持', '卖出', '离场', '止损', '止盈', '减配', '降仓'];
 const BUY_WORDS = ['加仓', '补仓', '买入', '增持', '加配', '加至', '建仓'];
@@ -158,11 +163,16 @@ function describeRule(score: number | null | undefined, bands?: number[][]): str
   return `评分 ${fmt(score)} 落入 ≥${matchedThreshold} 档 → ${(matchedWeight * 100).toFixed(0)}%`;
 }
 
-/** 码生成硬约束文本（AI 不合规时用它替换 longAction，保证不出现反向建议）。 */
+/**
+ * 码生成硬约束文本（量化优先的行动句）。
+ * v2.16.1: 量化目标为实质差异时，longAction 一律采用本指令——AI 的文本
+ * 只保留在 analysis/risk 中解释，行动力度必须与量化目标一致。
+ */
 export function buildQuantDirective(
   sig: QuantSignal,
   currentWeight: number,
   dir: QuantDirection,
+  levels?: { support?: number; resistance?: number },
 ): string {
   const targetPct = Math.round(sig.target_weight * 1000) / 10;
   const currentPct = Math.round(currentWeight * 1000) / 10;
@@ -180,7 +190,16 @@ export function buildQuantDirective(
     .join('、');
   const scoreText = sig.score != null ? `综合评分 ${fmt(sig.score)}` : '';
   const evidence = [factors, scoreText].filter(Boolean).join('，');
-  return `【量化优先】目标仓位 ${targetPct}%（当前约 ${currentPct}%）：${action}${evidence ? `；因子：${evidence}` : ''}。`;
+  const levelBits: string[] = [];
+  if (levels?.support != null) {
+    levelBits.push(`支撑 ${levels.support.toFixed(3)}`);
+  }
+  if (levels?.resistance != null) {
+    levelBits.push(`压力 ${levels.resistance.toFixed(3)}`);
+  }
+  const levelText = levelBits.length > 0 ? `参考关键位 ${levelBits.join('/')}` : '';
+  const tail = [evidence ? `因子：${evidence}` : '', levelText].filter(Boolean).join('；');
+  return `【量化优先】目标仓位 ${targetPct}%（当前约 ${currentPct}%）：${action}${tail ? `；${tail}` : ''}。`;
 }
 
 /** 供长期档 Prompt 注入的量化信号块。 */
@@ -217,16 +236,19 @@ export interface ResolvedQuantAdvice {
 }
 
 /**
- * 强硬执行：根据量化目标校验 AI 输出。
- * - 方向一致 → 原样保留；
- * - 方向相反（缺一致动作词，或计划方向相反）→ longAction 替换为码生成指令，
- *   方向不符的计划丢弃（计划为空或方向一致则保留）。
+ * 强硬执行：量化目标优先（v2.16.1 收紧）。
+ * - 目标与当前相差 ±2pp 内（维持档）→ 保留 AI 文本；
+ * - 否则（需减仓/加仓）→ **longAction 一律使用码生成量化指令**，
+ *   AI 的文本不再进入行动行（只保留 analysis/risk 解释）——避免模型用
+ *   「减仓 1/3」这类不足额/条件化叙事弱化量化目标；
+ *   方向不符的 longPlan 丢弃（方向一致则保留，供采纳弹窗预填）。
  */
 export function resolveQuantAdvice(
   aiText: string,
   plan: ActionPlan | null | undefined,
   sig: QuantSignal,
   currentWeight: number,
+  levels?: { support?: number; resistance?: number },
 ): ResolvedQuantAdvice {
   const dir = quantRequiredDirection(sig.target_weight, currentWeight);
   if (dir === 'hold') {
@@ -234,12 +256,8 @@ export function resolveQuantAdvice(
   }
   const requiredSide = dir === 'sell' ? 'sell' : 'buy';
   const planOk = plan == null || plan.side === requiredSide;
-  const textOk = isAdviceDirectionConsistent(aiText, dir);
-  if (textOk && planOk) {
-    return { longAction: aiText, longPlan: plan, overridden: false };
-  }
   return {
-    longAction: buildQuantDirective(sig, currentWeight, dir),
+    longAction: buildQuantDirective(sig, currentWeight, dir, levels),
     longPlan: planOk ? plan : null,
     overridden: true,
   };
@@ -304,11 +322,14 @@ export function getQuantSignalFor(code: string, today = new Date()): QuantSignal
   return isQuantSignalFresh(sig.as_of, today) ? sig : null;
 }
 
-/** 快照指纹用的量化签名——量化数据变化时强制重新诊断。 */
+/**
+ * 快照指纹用的量化签名——量化数据变化（或约束逻辑升级）时强制重新诊断。
+ * v2.16.1: 追加 QUANT_LOGIC_VERSION，升级后旧缓存自动失效、按新强硬规则重生。
+ */
 export function quantSignatureFor(code: string): string | null {
   const sig = getQuantSignalFor(code);
   if (!sig) {
     return null;
   }
-  return `${sig.as_of}|${sig.target_weight}|${sig.score ?? ''}`;
+  return `${sig.as_of}|${sig.target_weight}|${sig.score ?? ''}|${QUANT_LOGIC_VERSION}`;
 }

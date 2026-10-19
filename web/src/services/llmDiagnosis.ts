@@ -15,6 +15,7 @@ import { getExternalContextText } from './externalMarkets';
 import {
   formatQuantSignalBlock,
   getQuantSignalFor,
+  quantRequiredDirection,
   resolveQuantAdvice,
 } from './quantSignals';
 import { formatHistoryText } from '../utils/priceHistory';
@@ -385,9 +386,26 @@ export async function runDiagnosis(
     if (!isValidSignal(parsed.signal)) {
       return { ok: false, raw };
     }
+    // v2.16.1: 量化目标优先——预先判定是否绑定（目标与当前仓位存在实质差异）。
+    const quantSignal =
+      withPosition && horizon === 'long' ? getQuantSignalFor(snapshot.code) : null;
+    const quantPositionValue = hasPosition(watchlistItem)
+      ? watchlistItem.positionQty! * watchlistItem.costPrice!
+      : 0;
+    const quantWeight =
+      totalPortfolioValue > 0 ? quantPositionValue / totalPortfolioValue : 0;
+    const quantDir = quantSignal
+      ? quantRequiredDirection(quantSignal.target_weight, quantWeight)
+      : 'hold';
+    const quantBinding = quantSignal != null && quantDir !== 'hold';
     if (withPosition) {
       if (horizon === 'long') {
-        if (
+        if (quantBinding) {
+          // 绑定量化时行动句由码生成替换，AI 文本只需存在（供 analysis/risk 解释）。
+          if (!parsed.longAction) {
+            return { ok: false, raw };
+          }
+        } else if (
           !parsed.longAction ||
           parsed.longAction.length > 60 ||
           !anchorsToKeyLevel(parsed.longAction, parsed.supportLevel, parsed.resistanceLevel)
@@ -443,22 +461,19 @@ export async function runDiagnosis(
     } else {
       parsed.buildPlan = sanitizeActionPlan(parsed.buildPlan);
     }
-    // v2.16.0: 量化目标优先——AI 方向与量化硬约束不一致时，用码生成指令
-    // 替换 longAction（量化优先，AI 不得反向建议），方向不符的计划丢弃。
-    if (withPosition && horizon === 'long') {
-      const quant = getQuantSignalFor(snapshot.code);
-      if (quant) {
-        const positionValue = watchlistItem.positionQty! * watchlistItem.costPrice!;
-        const weight = totalPortfolioValue > 0 ? positionValue / totalPortfolioValue : 0;
-        const resolved = resolveQuantAdvice(
-          parsed.longAction!,
-          parsed.longPlan ?? null,
-          quant,
-          weight,
-        );
-        parsed.longAction = resolved.longAction;
-        parsed.longPlan = resolved.longPlan;
-      }
+    // v2.16.1: 量化目标优先（强硬版）——目标与当前存在实质差异时，行动句
+    // 一律由码生成（AI 的不足额/条件化叙事不再进入行动行，只保留 analysis/risk
+    // 解释），方向不符的 longPlan 丢弃。
+    if (quantSignal && quantBinding) {
+      const resolved = resolveQuantAdvice(
+        parsed.longAction!,
+        parsed.longPlan ?? null,
+        quantSignal,
+        quantWeight,
+        { support: parsed.supportLevel, resistance: parsed.resistanceLevel },
+      );
+      parsed.longAction = resolved.longAction;
+      parsed.longPlan = resolved.longPlan;
     }
     // v2.12.4: 剥离另一持仓模式混入的建议字段，保证展示/缓存数据确定性。
     return { ok: true, data: normalizeDiagnosisByPosition(parsed, withPosition, horizon) };

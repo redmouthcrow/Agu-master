@@ -2,7 +2,7 @@
 
 > 本文件为 [Product-Spec.md](./Product-Spec.md) 的 UI 附录，开发实现以此为准。
 
-**文档版本**：2.16.0（对齐 Product-Spec 2.16.0）
+**文档版本**：2.16.1（对齐 Product-Spec 2.16.1）
 
 ---
 
@@ -201,7 +201,7 @@ min-height: 280px; /* 小屏兜底 */
 
 无持仓（观望，所有周期一致）：仅要求 buildPositionAdvice + buildPlan。
 
-**量化信号优先（v2.16.0，长期档）**：当 User Message 含「量化信号」时，长期段追加硬约束——量化目标仓位为最高优先级，`longAction` 必须与目标方向一致（目标 0% 必须建议清仓、目标低于当前须减仓至目标、高于当前须加仓至目标、±2pp 内维持）；**严禁反向建议**。解析层强制校验：AI 方向不合规时由码生成指令替换 `longAction`，方向不符的 `longPlan` 丢弃（`services/quantSignals.ts` 的 `resolveQuantAdvice`）。
+**量化信号优先（v2.16.0 起，v2.16.1 收紧，长期档）**：当 User Message 含「量化信号」时，量化目标仓位为最高优先级。**目标与当前仓位相差超出 ±2pp（绑定）时，`longAction` 一律由码生成**（「【量化优先】目标仓位 x%（当前约 y%）：应清仓离场…；因子：…；参考关键位 支撑 a/压力 b。」）——AI 文本只保留在 analysis/risk 中解释，方向相反或不足额的叙事均不进入行动行；方向不符的 `longPlan` 丢弃、方向一致的保留。±2pp 内（维持档）保留 AI 文本。实现：`services/quantSignals.ts` 的 `resolveQuantAdvice`。
 
 **解析层归一化**（`utils/diagnosisMode.ts`）：按「持仓模式 + 投资周期」确定性剥离另一族建议字段——同一条诊断中只可能保留唯一一族建议。
 
