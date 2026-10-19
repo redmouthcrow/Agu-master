@@ -197,6 +197,11 @@ export interface AppConfig {
    * Undefined behaves as 'short' (backward compatible).
    */
   investmentHorizon?: InvestmentHorizon;
+  /**
+   * v2.16.0: 量化信号契约文件路径（QuantifySTAR50 的 agu-quant-signal/v1 导出）。
+   * 长期档读取并作为硬约束注入；空/无效/过期 → 不注入、不约束。仅桌面版。
+   */
+  quantSignalFile?: string;
   /** v2.9: User-specified total portfolio capital (元). If set, overrides computed total for position weighting. */
   totalCapital?: number;
   /** v2.10: Simulated account principal (元). Required before adopting buy plans. */

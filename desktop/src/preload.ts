@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('aguDesktop', {
   saveLiveSync: (payload: unknown) => ipcRenderer.invoke('agu:save-live-sync', payload),
   loadLiveSync: () => ipcRenderer.invoke('agu:load-live-sync'),
   storageGet: (key: string) => ipcRenderer.invoke('agu:storage-get', key),
+  readTextFile: (path: string) => ipcRenderer.invoke('agu:read-text-file', path),
   storageSet: (key: string, value: unknown) =>
     ipcRenderer.invoke('agu:storage-set', key, value),
   storageRemove: (key: string) => ipcRenderer.invoke('agu:storage-remove', key),

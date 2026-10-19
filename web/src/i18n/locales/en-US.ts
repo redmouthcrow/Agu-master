@@ -48,6 +48,10 @@ export const enUS: Record<MessageKey, string> = {
   'config.horizonLong': 'Long (weeks–months)',
   'config.horizonHint': 'Shapes the AI advice: long gives mid-term hold/reduce strategy and exit conditions only, ignoring intraday noise; short/swing keep the original format',
 
+  'config.quantSignalFile': 'Quant signal file (long-term hard constraint)',
+  'config.quantSignalFilePlaceholder': 'D:\\mine\\QuantifySTAR50\\data\\exports\\latest.json',
+  'config.quantSignalFileHint': 'Output of QuantifySTAR50 `export-latest`; long-term advice is hard-constrained by the quant target (quant-first, AI must not contradict); signals older than 7 days are ignored',
+
   'card.longActionPrefix': 'Long-term: ',
 
   'adoptDialog.title': 'Adopt advice & place order',

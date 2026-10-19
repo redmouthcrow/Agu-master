@@ -2,7 +2,7 @@
 
 > 本文件为 [Product-Spec.md](./Product-Spec.md) 的 UI 附录，开发实现以此为准。
 
-**文档版本**：2.15.3（对齐 Product-Spec 2.15.3）
+**文档版本**：2.16.0（对齐 Product-Spec 2.16.0）
 
 ---
 
@@ -173,7 +173,7 @@ min-height: 280px; /* 小屏兜底 */
 
 ---
 
-## 附录 A：System Prompt 结构与约束（v2.15.0）
+## 附录 A：System Prompt 结构与约束（v2.16.0）
 
 > 完整文本以 `web/src/services/llmDiagnosis.ts` 为准（本节为结构摘要，2026-10-14 同步，避免整段复制漂移）。
 
@@ -201,9 +201,11 @@ min-height: 280px; /* 小屏兜底 */
 
 无持仓（观望，所有周期一致）：仅要求 buildPositionAdvice + buildPlan。
 
+**量化信号优先（v2.16.0，长期档）**：当 User Message 含「量化信号」时，长期段追加硬约束——量化目标仓位为最高优先级，`longAction` 必须与目标方向一致（目标 0% 必须建议清仓、目标低于当前须减仓至目标、高于当前须加仓至目标、±2pp 内维持）；**严禁反向建议**。解析层强制校验：AI 方向不合规时由码生成指令替换 `longAction`，方向不符的 `longPlan` 丢弃（`services/quantSignals.ts` 的 `resolveQuantAdvice`）。
+
 **解析层归一化**（`utils/diagnosisMode.ts`）：按「持仓模式 + 投资周期」确定性剥离另一族建议字段——同一条诊断中只可能保留唯一一族建议。
 
-## 附录 B：User Message 模板（v2.15.0）
+## 附录 B：User Message 模板（v2.16.0）
 
 ```text
 {name} {code} | {instrumentTypeLabel} | 对齐 {alignedTime} | {session}
@@ -216,6 +218,12 @@ min-height: 280px; /* 小屏兜底 */
 美股板块风向(最近收盘): 费半ETF | 英伟达 | 台积电 | 美光科技 | 苹果 | 特斯拉（各 ±x.xx%）
 亚太实时: 恒生指数 | 恒生科技 | 三星电子 | SK海力士（各 ±x.xx%）
 持仓: qty={positionQty}{股|份}, cost={costPrice}, pnlPct=±x.xx%, 浮动盈亏={n}元, 占总仓位约{w}%, 已实现盈亏={n}元, 可用资金={n}元   ← 仅配置持仓时
+量化信号（QuantifySTAR50，as-of {YYYY-MM-DD}）:   ← v2.16.0；仅长期档且配置了量化信号文件
+因子(标准化): momentum -0.67 | trend -1.30
+复合评分 -0.92 → 目标仓位 0%（评分 -0.92 低于最低档 -0.5 → 0%）
+当前持仓占比约 60%
+策略回测: 年化 7.7% | 夏普 0.37 | 最大回撤 -33.0% | 胜率 70.0%
+硬约束：量化目标优先——longAction 必须与目标方向一致，禁止反向建议。
 ```
 
 - `instrumentTypeLabel`：`instrumentType=stock` → `A股`；`fund_etf` → `场内基金`

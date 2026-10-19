@@ -14,6 +14,7 @@ export function buildSnapshotFingerprint(
   costPrice?: number,
   horizon?: InvestmentHorizon,
   actualPnl?: number,
+  quantSignature?: string | null,
 ): string {
   const parts: (string | number | null | undefined)[] = [
     snapshot.code,
@@ -28,6 +29,10 @@ export function buildSnapshotFingerprint(
   ];
   if (positionQty != null && costPrice != null) {
     parts.push(positionQty, costPrice, `p:${actualPnl ?? 'null'}`);
+  }
+  // v2.16.0: 量化信号参与指纹——量化侧改因子/重导出后，即使行情未变也会重新诊断。
+  if (quantSignature) {
+    parts.push(`q:${quantSignature}`);
   }
   return parts
     .map((v) => (v === null || v === undefined ? 'null' : String(v)))

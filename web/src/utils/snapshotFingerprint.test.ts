@@ -56,4 +56,16 @@ describe('buildSnapshotFingerprint', () => {
     const b = buildSnapshotFingerprint({ ...snap, price: 6.55 }, '交易中', 1000, 6.0);
     expect(a).not.toBe(b);
   });
+
+  it('量化签名变化 → 指纹变化（v2.16.0：量化数据更新强制重新诊断）', () => {
+    const a = buildSnapshotFingerprint(snap, '交易中', 1000, 6.0, 'long', 500, '2026-10-16|0|-0.92');
+    const b = buildSnapshotFingerprint(snap, '交易中', 1000, 6.0, 'long', 500, '2026-10-19|0.5|0.12');
+    expect(a).not.toBe(b);
+  });
+
+  it('无量化签名与有签名 → 指纹不同', () => {
+    const a = buildSnapshotFingerprint(snap, '交易中', 1000, 6.0, 'long', 500);
+    const b = buildSnapshotFingerprint(snap, '交易中', 1000, 6.0, 'long', 500, '2026-10-16|0|-0.92');
+    expect(a).not.toBe(b);
+  });
 });

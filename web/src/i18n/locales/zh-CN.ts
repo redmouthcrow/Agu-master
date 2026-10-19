@@ -46,6 +46,10 @@ export const zhCN = {
   'config.horizonLong': '长期（数周~数月）',
   'config.horizonHint': '决定 AI 建议的形态：长期模式只给中期持有/减仓策略与离场条件，忽略日内波动；短期/波段沿用原建议',
 
+  'config.quantSignalFile': '量化信号文件（长期硬约束）',
+  'config.quantSignalFilePlaceholder': 'D:\\mine\\QuantifySTAR50\\data\\exports\\latest.json',
+  'config.quantSignalFileHint': 'QuantifySTAR50 `export-latest` 的输出；长期策略以量化目标仓位为硬约束（量化优先，AI 不得反向建议），信号超过 7 天自动忽略',
+
   'card.longActionPrefix': '长期策略：',
 
   'adoptDialog.title': '采纳建议并挂单',

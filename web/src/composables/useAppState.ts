@@ -34,6 +34,7 @@ import { fetchQuotesWithFallback } from '../services/quoteJsonp';
 import { fetchSina } from '../services/quoteJsonp';
 import { LlmAuthError, runDiagnosis, sleep } from '../services/llmDiagnosis';
 import { ensureExternalContext } from '../services/externalMarkets';
+import { ensureQuantSignals, quantSignatureFor } from '../services/quantSignals';
 import {
   getCalendarFailed,
   isTradingDay,
@@ -794,6 +795,7 @@ async function refreshCardQuoteAndDiagnosis(
     card.stock.costPrice,
     config.value.investmentHorizon ?? 'short',
     card.stock.actualPnl,
+    quantSignatureFor(card.stock.code),
   );
   const cached = getDiagnosisCache()[card.stock.code];
   if (
@@ -1240,6 +1242,10 @@ export function useAppState() {
     const horizonChanged =
       partial.investmentHorizon != null &&
       partial.investmentHorizon !== config.value.investmentHorizon;
+    // v2.16.0: 量化信号文件变更后立即按新信号重新诊断。
+    const quantPathChanged =
+      Object.prototype.hasOwnProperty.call(partial, 'quantSignalFile') &&
+      partial.quantSignalFile !== config.value.quantSignalFile;
     if (partial.refreshFrequency != null) {
       partial.refreshFrequency = normalizeRefreshFrequency(partial.refreshFrequency);
     }
@@ -1275,8 +1281,8 @@ export function useAppState() {
     ) {
       restartScheduler();
     }
-    if (horizonChanged) {
-      // 立即按新契约重新诊断（行情未变也会重新调用——指纹含周期）。
+    if (horizonChanged || quantPathChanged) {
+      // 立即按新契约重新诊断（行情未变也会重新调用——指纹含周期/量化签名）。
       void runRefresh(false);
     }
   }
@@ -1538,8 +1544,10 @@ export function useAppState() {
       const aligned = getAlignedTimeLabel(trading, new Date(), config.value.refreshFrequency);
       const aiState = { stopAi: false };
       const externalReady = ensureExternalContext();
+      const quantReady = ensureQuantSignals(config.value.quantSignalFile);
       const quotes = await fetchQuotesWithFallback([code]);
       await externalReady;
+      await quantReady;
       const outcome = await refreshCardWithParseRetry(
         card,
         session,
@@ -1576,8 +1584,11 @@ export function useAppState() {
       const codes = cards.value.filter((c) => !c.stock.trackingOnly).map((c) => c.stock.code);
       // v2.15.0: 盘外参照与行情并行拉取，供本轮 LLM 注入。
       const externalReady = ensureExternalContext();
+      // v2.16.0: 量化信号文件（长期档硬约束）在诊断循环前就绪。
+      const quantReady = ensureQuantSignals(config.value.quantSignalFile);
       const quotes = await fetchQuotesWithFallback(codes);
       await externalReady;
+      await quantReady;
 
       const aiState = { stopAi: false };
       let reusedCount = 0;

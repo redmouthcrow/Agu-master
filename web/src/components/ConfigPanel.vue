@@ -268,6 +268,16 @@ function onAlwaysOnTopChange(e: Event) {
         </select>
         <span class="field-hint">{{ t('config.horizonHint') }}</span>
       </label>
+      <label v-if="isDesktop" class="field">
+        <span>{{ t('config.quantSignalFile') }}</span>
+        <input
+          :value="config.quantSignalFile ?? ''"
+          type="text"
+          :placeholder="t('config.quantSignalFilePlaceholder')"
+          @change="emit('save', { quantSignalFile: ($event.target as HTMLInputElement).value.trim() || undefined })"
+        />
+        <span class="field-hint">{{ t('config.quantSignalFileHint') }}</span>
+      </label>
       <label class="field">
         <span>总仓位金额(元)</span>
         <input

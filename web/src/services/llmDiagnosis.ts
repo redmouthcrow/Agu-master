@@ -12,6 +12,11 @@ import { calcPnlPct, hasPosition, roundCostPrice } from '../utils/position';
 import { normalizeDiagnosisByPosition } from '../utils/diagnosisMode';
 import { formatVolumeForPrompt } from './quoteJsonp';
 import { getExternalContextText } from './externalMarkets';
+import {
+  formatQuantSignalBlock,
+  getQuantSignalFor,
+  resolveQuantAdvice,
+} from './quantSignals';
 import { formatHistoryText } from '../utils/priceHistory';
 
 const SYSTEM_PROMPT_BASE = `# Role
@@ -134,6 +139,14 @@ const SYSTEM_PROMPT_LONG_POSITION = `${SYSTEM_PROMPT_BASE}
 - longPlan（可选）：仅当 longAction 明确包含**具体数量与触发价位**时输出（减仓/清仓 side="sell"；跌破卖出 condition="lte"、反弹卖出 condition="gte"；加仓 side="buy"、condition="lte"）。无明确数量或价位时输出 null，严禁编造。卖出 qty 不得超过持仓数量；买入金额不得超过可用资金。
 - signal 仍取五个标准标签；长期视角下通常为「多头持股」或「持股观望」，仅在趋势破坏时给出「逢高减仓」。
 
+# 量化信号优先（硬约束）
+当 User Message 包含「量化信号」时（来自用户自有量化系统的确定性规则，优先级高于你的技术判断）：
+- 量化目标仓位是**最高优先级硬约束**：longAction 必须与目标方向一致，**严禁输出反向建议**（目标需减仓/清仓时不得建议持有或加仓；目标需加仓时不得建议减仓）。
+- 目标仓位为 0%：必须明确建议**清仓/离场**（可给出执行价位与节奏），禁止「继续持有为主」或不足额减仓。
+- 目标低于当前占比：建议**减仓至目标附近**；目标高于当前占比：建议**加仓至目标附近**；相差在 ±2 个百分点内：建议**维持持有**。
+- longAction 以「量化目标 xx%」开头并给出对应动作（清仓/减至目标/加至目标/维持），随后给出执行价位（锚定 supportLevel/resistanceLevel）与离场条件。
+- 可在 analysis/risk 中解释因子依据与背离风险，但**不得用技术观点推翻量化方向**。
+
 JSON 格式：
 {
   "signal": "4字标准标签",
@@ -226,6 +239,15 @@ function buildUserMessage(
     if (watchlistItem.actualPnl != null) msg += `, 已实现盈亏=${watchlistItem.actualPnl}元`;
     // v2.10: available cash bounds buy-side structured orders.
     if (availableCash != null) msg += `, 可用资金=${availableCash}元`;
+
+    // v2.16.0: 长期档注入量化信号（QuantifySTAR50，硬约束锚点）。
+    if (horizon === 'long') {
+      const quant = getQuantSignalFor(snapshot.code);
+      if (quant) {
+        const weightFrac = totalPortfolioValue > 0 ? positionValue / totalPortfolioValue : 0;
+        msg += `\n${formatQuantSignalBlock(quant, weightFrac)}`;
+      }
+    }
   }
 
   return msg;
@@ -420,6 +442,23 @@ export async function runDiagnosis(
       }
     } else {
       parsed.buildPlan = sanitizeActionPlan(parsed.buildPlan);
+    }
+    // v2.16.0: 量化目标优先——AI 方向与量化硬约束不一致时，用码生成指令
+    // 替换 longAction（量化优先，AI 不得反向建议），方向不符的计划丢弃。
+    if (withPosition && horizon === 'long') {
+      const quant = getQuantSignalFor(snapshot.code);
+      if (quant) {
+        const positionValue = watchlistItem.positionQty! * watchlistItem.costPrice!;
+        const weight = totalPortfolioValue > 0 ? positionValue / totalPortfolioValue : 0;
+        const resolved = resolveQuantAdvice(
+          parsed.longAction!,
+          parsed.longPlan ?? null,
+          quant,
+          weight,
+        );
+        parsed.longAction = resolved.longAction;
+        parsed.longPlan = resolved.longPlan;
+      }
     }
     // v2.12.4: 剥离另一持仓模式混入的建议字段，保证展示/缓存数据确定性。
     return { ok: true, data: normalizeDiagnosisByPosition(parsed, withPosition, horizon) };

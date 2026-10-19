@@ -28,6 +28,8 @@ export interface AguDesktopBridge {
   saveLiveSync: (payload: LiveSyncPayload) => Promise<boolean>;
   loadLiveSync: () => Promise<LiveSyncPayload | null>;
   storageGet: <T>(key: string) => Promise<T | null>;
+  /** v2.16.0: 读取文本文件（量化信号契约文件等）。只读、限制大小。 */
+  readTextFile: (path: string) => Promise<string | null>;
   storageSet: (key: string, value: unknown) => Promise<boolean>;
   storageRemove: (key: string) => Promise<void>;
   cleanupCalendars: (keepYears: number[]) => Promise<void>;

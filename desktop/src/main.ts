@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, Menu, Tray } from 'electron';
+import fs from 'node:fs';
 import {
   cleanupOldCalendars as cleanupCalendarsInStore,
   exportUserDataForBackup,
@@ -287,6 +288,22 @@ function registerIpc(): void {
   });
 
   ipcMain.handle('agu:load-live-sync', () => loadLiveSync());
+
+  // v2.16.0: 量化信号文件读取（QuantifySTAR50 导出契约）。只读、限制大小。
+  ipcMain.handle('agu:read-text-file', (_event, filePath: unknown) => {
+    try {
+      if (typeof filePath !== 'string' || filePath.length === 0 || filePath.length > 1024) {
+        return null;
+      }
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile() || stat.size > 2 * 1024 * 1024) {
+        return null;
+      }
+      return fs.readFileSync(filePath, 'utf8');
+    } catch {
+      return null;
+    }
+  });
 
   ipcMain.handle('agu:storage-get', (_event, key: string) => storageGet(key));
 
