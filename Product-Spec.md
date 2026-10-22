@@ -325,7 +325,7 @@
   - 美股板块风向（最近收盘）：费半ETF / 英伟达 / 台积电 / 美光科技 / 苹果 / 特斯拉
   - 亚太实时：恒生指数 / 恒生科技 / 三星电子 / SK海力士
   - System Prompt 增补 **External Reference（盘外参照）** 规则段：盘外为**辅助权重**（与个股量价一致时提升置信度、背离时必须在 analysis/risk 中指出）；最终建议**必须锚定个股自身 supportLevel/resistanceLevel**；指数类数据只影响情绪描述与风险提示
-- **v2.16.0 新增：量化信号（仅长期档）**（`services/quantSignals.ts`）：读取配置的 `quantSignalFile`（QuantifySTAR50 `export-latest` 输出，`agu-quant-signal/v1`），按证券代码归一化匹配后注入：因子标准化值（momentum/trend 等）、复合评分与分档规则、**目标仓位**、当前持仓占比、策略回测摘要、硬约束声明。**量化目标优先**：长期 Prompt 增补「量化信号优先（硬约束）」段；解析层强制校验——AI 的 `longAction` 与目标方向相反时由码生成指令替换（`【量化优先】目标仓位 x%（当前约 y%）：应清仓离场…`），方向不符的 `longPlan` 丢弃；目标与当前相差 ±2pp 内视为维持。信号超过 7 个自然日、文件缺失/异常、非桌面环境 → 不注入、不约束（fail-open）
+- **v2.16.0 新增：量化信号（仅长期档）**（`services/quantSignals.ts`）：读取配置的 `quantSignalFile`（QuantifySTAR50 `export-latest` 或 DSHQuant `etf/agu_signal_export.py` 输出，`agu-quant-signal/v1`；`score`/`close`/`factors` 可空，适配 ETF 暴露载体类条目），按证券代码归一化匹配后注入：因子标准化值（momentum/trend 等）、复合评分与分档规则、**目标仓位**、当前持仓占比、策略回测摘要、硬约束声明。**量化目标优先**：长期 Prompt 增补「量化信号优先（硬约束）」段；解析层强制校验——AI 的 `longAction` 与目标方向相反时由码生成指令替换（`【量化优先】目标仓位 x%（当前约 y%）：应清仓离场…`），方向不符的 `longPlan` 丢弃；目标与当前相差 ±2pp 内视为维持。信号超过 7 个自然日、文件缺失/异常、非桌面环境 → 不注入、不约束（fail-open）
 - 可选持仓上下文：`positionQty`、`costPrice`、预计算 `pnlPct`（见功能 1）
 
 **输出（有持仓）**：
@@ -1290,7 +1290,7 @@ AI: {"signal":"持股观望","analysis":"缩量震荡","risk":"跟踪误差放�
 
 ---
 
-**文档版本**：2.16.1
+**文档版本**：2.16.2
 
 **最后更新**：2026-10-14
 

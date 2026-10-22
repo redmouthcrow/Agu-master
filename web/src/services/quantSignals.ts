@@ -212,10 +212,8 @@ export function formatQuantSignalBlock(sig: QuantSignal, currentWeight: number):
     lines.push(`因子(标准化): ${factors.join(' | ')}`);
   }
   const rule = describeRule(sig.score, sig.score_to_weight);
-  const scoreText = sig.score != null ? `复合评分 ${fmt(sig.score)}` : '复合评分';
-  lines.push(
-    `${scoreText} → 目标仓位 ${(sig.target_weight * 100).toFixed(0)}%${rule ? `（${rule}）` : ''}`,
-  );
+  const targetText = `目标仓位 ${(sig.target_weight * 100).toFixed(0)}%${rule ? `（${rule}）` : ''}`;
+  lines.push(sig.score != null ? `复合评分 ${fmt(sig.score)} → ${targetText}` : targetText);
   lines.push(`当前持仓占比约 ${(currentWeight * 100).toFixed(0)}%`);
   const bt = sig.backtest;
   if (bt && typeof bt.ann_return === 'number') {
@@ -269,10 +267,13 @@ let cachedFile: QuantSignalFile | null = null;
 let cachedPath: string | null = null;
 let cachedAt = 0;
 
-/** 每轮刷新前调用：读取/更新量化导出文件（桌面版；失败保留上次好数据）。 */
+/**
+ * 每轮刷新前调用：读取/更新量化导出文件（桌面版；失败保留上次好数据）。
+ * v2.16.2: 缓存降到 1 分钟——量化侧重导出后，下一次刷新即可生效。
+ */
 export async function ensureQuantSignals(
   filePath: string | undefined,
-  maxAgeMs = 30 * 60 * 1000,
+  maxAgeMs = 60 * 1000,
 ): Promise<void> {
   if (!filePath) {
     cachedFile = null;

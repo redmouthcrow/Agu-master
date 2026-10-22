@@ -48,7 +48,7 @@ export const zhCN = {
 
   'config.quantSignalFile': '量化信号文件（长期硬约束）',
   'config.quantSignalFilePlaceholder': 'D:\\mine\\QuantifySTAR50\\data\\exports\\latest.json',
-  'config.quantSignalFileHint': 'QuantifySTAR50 `export-latest` 的输出；长期策略以量化目标仓位为硬约束（量化优先，AI 不得反向建议），信号超过 7 天自动忽略',
+  'config.quantSignalFileHint': 'QuantifySTAR50 `export-latest` 或 DSHQuant `etf/agu_signal_export.py` 的输出；长期策略以量化目标仓位为硬约束（量化优先，AI 不得反向建议），信号超过 7 天自动忽略',
 
   'card.longActionPrefix': '长期策略：',
 

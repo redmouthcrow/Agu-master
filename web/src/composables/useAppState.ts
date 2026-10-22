@@ -34,7 +34,12 @@ import { fetchQuotesWithFallback } from '../services/quoteJsonp';
 import { fetchSina } from '../services/quoteJsonp';
 import { LlmAuthError, runDiagnosis, sleep } from '../services/llmDiagnosis';
 import { ensureExternalContext } from '../services/externalMarkets';
-import { ensureQuantSignals, quantSignatureFor } from '../services/quantSignals';
+import {
+  ensureQuantSignals,
+  getQuantSignalFor,
+  quantRequiredDirection,
+  quantSignatureFor,
+} from '../services/quantSignals';
 import {
   getCalendarFailed,
   isTradingDay,
@@ -830,14 +835,32 @@ async function refreshCardQuoteAndDiagnosis(
         // v2.15.1: 冻结时必须把锚定关键位一并冻结——否则每轮的对比基准会随
         // AI 重新锚定的新 levels 漂移（几轮累积后误破冻），且冻结文本引用的
         // 价位与卡片显示/写入 keyLevels 的价位脱节。冻结后对比基准=冻结原点。
-        const keepCachedLong = shouldKeepCachedLongAdvice({
-          cachedLong: cachedDiag?.longAction,
-          cachedSupport: cachedDiag?.supportLevel,
-          cachedResistance: cachedDiag?.resistanceLevel,
-          newSupport: result.data.supportLevel,
-          newResistance: result.data.resistanceLevel,
-          price: card.snapshot?.price,
-        });
+        // v2.16.2: 量化绑定时跳过冻结——量化目标与当前仓位存在实质差异时，
+        // 行动句必须来自本轮码生成指令，不能被冻结的旧文本覆盖。
+        const quantSig = getQuantSignalFor(card.stock.code);
+        const totalPortfolioValue =
+          config.value.totalCapital ??
+          config.value.watchlist.reduce(
+            (sum, w) => (hasPosition(w) ? sum + w.positionQty! * w.costPrice! : sum),
+            0,
+          );
+        const positionValue = hasPosition(card.stock)
+          ? card.stock.positionQty! * card.stock.costPrice!
+          : 0;
+        const currentWeight = totalPortfolioValue > 0 ? positionValue / totalPortfolioValue : 0;
+        const quantBinding =
+          quantSig != null &&
+          quantRequiredDirection(quantSig.target_weight, currentWeight) !== 'hold';
+        const keepCachedLong =
+          !quantBinding &&
+          shouldKeepCachedLongAdvice({
+            cachedLong: cachedDiag?.longAction,
+            cachedSupport: cachedDiag?.supportLevel,
+            cachedResistance: cachedDiag?.resistanceLevel,
+            newSupport: result.data.supportLevel,
+            newResistance: result.data.resistanceLevel,
+            price: card.snapshot?.price,
+          });
         diagnosis = keepCachedLong
           ? {
               ...result.data,

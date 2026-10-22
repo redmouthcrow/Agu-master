@@ -50,7 +50,7 @@ export const enUS: Record<MessageKey, string> = {
 
   'config.quantSignalFile': 'Quant signal file (long-term hard constraint)',
   'config.quantSignalFilePlaceholder': 'D:\\mine\\QuantifySTAR50\\data\\exports\\latest.json',
-  'config.quantSignalFileHint': 'Output of QuantifySTAR50 `export-latest`; long-term advice is hard-constrained by the quant target (quant-first, AI must not contradict); signals older than 7 days are ignored',
+  'config.quantSignalFileHint': 'Output of QuantifySTAR50 `export-latest` or DSHQuant `etf/agu_signal_export.py`; long-term advice is hard-constrained by the quant target (quant-first, AI must not contradict); signals older than 7 days are ignored',
 
   'card.longActionPrefix': 'Long-term: ',
 

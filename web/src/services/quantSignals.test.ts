@@ -182,4 +182,29 @@ describe('formatQuantSignalBlock', () => {
     expect(text).toContain('年化 7.7%');
     expect(text).toContain('硬约束');
   });
+
+  it('评分缺失（ETF/持仓类条目，v2.16.2）→ 不显示空的「复合评分 →」前缀', () => {
+    const etfSig: QuantSignal = {
+      as_of: '2026-10-21',
+      target_weight: 1,
+      score: null,
+      factors: [],
+      score_to_weight: [],
+    };
+    const text = formatQuantSignalBlock(etfSig, 0.348);
+    expect(text).toContain('目标仓位 100%');
+    expect(text).not.toContain('复合评分');
+    expect(text).toContain('当前持仓占比约 35%');
+  });
+});
+
+describe('量化目标 100%（ETF 暴露载体）方向判定', () => {
+  it('目标 100% vs 当前 34.8% → 应加仓至目标', () => {
+    const etfSig: QuantSignal = { as_of: '2026-10-21', target_weight: 1, score: null };
+    const r = resolveQuantAdvice('继续持有', null, etfSig, 0.348);
+    expect(r.overridden).toBe(true);
+    expect(r.longAction).toContain('目标仓位 100%');
+    expect(r.longAction).toContain('当前约 34.8%');
+    expect(r.longAction).toContain('应加仓至目标');
+  });
 });
